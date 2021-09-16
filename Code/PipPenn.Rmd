@@ -1,0 +1,1867 @@
+---
+title: "PipPenn Data Analysis"
+author: "Quy Cao and Haochang Shou"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, fig.align = "center",
+                      message = FALSE, warning = FALSE,
+                      fig.width = 10)
+
+options(scipen=999)
+
+
+library(corrplot)
+library(caret)
+library(ROCR)
+library(dygraphs)
+library(xts)
+library(lubridate)
+library(ggplot2)
+library(zoo)
+library("factoextra") ## plot pcs
+library(kernlab)      # SVM methodology
+library(e1071)        # SVM methodology
+#library(Movelet)
+library(dplyr)
+```
+
+## Exploration of the Time Series Data
+
+Currently we have data from 10 subjects. Here we only show the examples from Patient 52.
+
+```{r load,echo=FALSE}
+
+#Load Data
+#dat<-read.csv('/Users/hshou/Box/PipPenn/Data/patient52.csv',header = TRUE,stringsAsFactors = FALSE)
+dat<-read.csv('data/patient52.csv',header = TRUE,stringsAsFactors = FALSE)
+
+#convert time series
+dat$timestamp<-substr(dat$activity_timestamp,12,23)
+dat$time<-as.numeric(hms(dat$timestamp))
+dat$time<-dat$time-dat$time[1]
+act.name<-unique(dat$ActivityName)
+
+dat$Activitylabel<-match(dat$ActivityName,unique(dat$ActivityName))
+```  
+
+The code for activity types are 
+```{r actname,echo=FALSE}
+print(unique(dat$ActivityName))
+```
+
+```{r plot, echo=FALSE}
+wrist.type<-unique(dat$Wrist_Location)
+
+wrist.r<-which(dat$Wrist_Location==wrist.type[1]) #right wrist
+wrist.l<-which(dat$Wrist_Location==wrist.type[2])
+
+dygraph(data=dat[wrist.r,c('time',names(dat)[c(8:10,30)])],main=paste('Patient', dat$PatientID[1],' Accel Right Wrist',sep=''))%>% 
+  dyAxis("x", drawGrid = FALSE) %>%
+  dyOptions(colors = RColorBrewer::brewer.pal(7, "Set1"))  %>%
+  dyRangeSelector()
+
+dygraph(data=dat[wrist.r,c('time',names(dat)[c(11:13,30)])],main=paste('Patient', dat$PatientID[1],' Rotation Right Wrist',sep=''))%>% 
+  dyAxis("x", drawGrid = FALSE) %>%
+  dyOptions(colors = RColorBrewer::brewer.pal(7, "Set1"))  %>%
+  dyRangeSelector()
+
+dygraph(data=dat[wrist.r,c('time',names(dat)[c(20:22,30)])],main=paste('Patient', dat$PatientID[1],' Attitude Right Wrist',sep=''))%>% 
+  dyAxis("x", drawGrid = FALSE) %>%
+  dyOptions(colors = RColorBrewer::brewer.pal(7, "Set1"))  %>%
+  dyRangeSelector()
+
+dygraph(data=dat[wrist.r,c('time',names(dat)[c(14:16,30)])],main=paste('Patient', dat$PatientID[1],' Gravity Right Wrist',sep=''))%>% 
+  dyAxis("x", drawGrid = FALSE) %>%
+  dyOptions(colors = RColorBrewer::brewer.pal(7, "Set1"))  %>%
+  dyRangeSelector()
+
+dygraph(data=dat[wrist.r,c('time',names(dat)[c(17:19,30)])],main=paste('Patient', dat$PatientID[1],' Magentic Right Wrist',sep=''))%>% 
+  dyAxis("x", drawGrid = FALSE) %>%
+  dyOptions(colors = RColorBrewer::brewer.pal(7, "Set1"))  %>%
+  dyRangeSelector()
+```
+
+Consider "8.Med taking" chunk of activities for analysis.
+
+```{r,eval=FALSE}
+## look at 8.med taking
+med_taking_8 <- subset(dat, Activitylabel == 16)
+#dim(med_taking_8)
+#min(med_taking_8$time)
+med_taking_8$mini_activity <- factor(ifelse(med_taking_8$time > (min(med_taking_8$time)+2)
+                                            & med_taking_8$time < (min(med_taking_8$time)+4),
+                                            "Open Bottle","Others"), levels = c("Others","Open Bottle"))
+## check mini activity
+table(med_taking_8$mini_activity)
+
+## check correlation
+corrplot(cor(med_taking_8[,c("accel_x_coord","accel_y_coord","accel_z_coord",
+                         "rotate_x_coord","rotate_y_coord", "rotate_z_coord")]))
+
+## talk about this with Haochang
+plot(med_taking_8$time,med_taking_8$accel_x_coord, type = "l")
+lines(rollmean(med_taking_8$accel_x_coord, k = 3), col = "red")
+lines(lowess(med_taking_8$time,med_taking_8$accel_x_coord, f = 0.000001), col = "green") 
+legend("topleft",                                               # Add legend to line plot
+       col = c("red", "green"),
+       lty = 1,
+       lwd = 2,
+       cex = 0.5,
+       c("Moving Average, k = 3", "Lowess Smooth, f = 0.000001"))
+
+## fit logistic model
+glm_open_bottle <- glm(mini_activity ~ accel_x_coord + accel_y_coord + accel_z_coord +
+                         rotate_x_coord + rotate_y_coord + rotate_z_coord + DeviceName,
+                         family = "binomial", data = med_taking_8)
+summary(glm_open_bottle)
+pscl::pR2(glm_open_bottle)
+
+#### perform PCA on 3 accel and 3 rotate variables
+predictors <- med_taking_8[,c("accel_x_coord","accel_y_coord","accel_z_coord",
+                              "rotate_x_coord","rotate_y_coord", "rotate_z_coord")]
+predictors.pca <- prcomp(predictors, center=TRUE, scale.=TRUE)
+summary(predictors.pca)
+pcs <- predictors.pca$x ## the PCs for regression
+
+## check pc plots
+fviz_pca_var(predictors.pca,axes = c(1, 2))
+fviz_pca_var(predictors.pca,axes = c(3, 4))
+fviz_pca_var(predictors.pca,axes = c(5, 6))
+
+## combine pcs to df
+med_taking_8 <- cbind(med_taking_8,pcs)
+
+## perform PCR
+glm_pcr <- glm(mini_activity ~ PC1 + PC2 + PC3 + DeviceName, family = "binomial", data = med_taking_8)
+summary(glm_pcr)
+pscl::pR2(glm_pcr)
+
+#### SVM
+svm.df <- med_taking_8[, c("mini_activity","accel_x_coord","accel_y_coord","accel_z_coord",
+                           "rotate_x_coord","rotate_y_coord", "rotate_z_coord")]
+## find optimal cost of misclassification
+# tune.out <- tune(svm, mini_activity ~ .,
+#                  data = svm.df,
+#                  kernel = "polynomial",
+#                  ranges = list(cost = c(0.001, 0.01, 0.1, 1, 5, 10)) 
+#                  ) # cost = 1
+# ## extract the best model
+# (bestmod <- tune.out$best.model)
+
+## Fit Support Vector Machine model to data set
+svmfit <- svm(mini_activity ~ ., data = svm.df, kernel = "polynomial", cost = 1)
+summary(svmfit)
+## Create a table of misclassified observations
+ypred <- predict(svmfit, svm.df)
+(misclass <- table(predict = ypred, truth = svm.df$mini_activity)) ## NOPE
+```
+
+I also study the movelet package. Thanks to Jiawei example, I was able to put together a workflow and this is what I got:
+
+STEP 1: create an AcceleData using the *Acceleration_Create*
+
+STEP 2: create chapters of movelets from the AcceleData above using *Movelet_Create*. Now you have your reference chapters. Next step is prediction of unlabeled chapters
+
+STEP 3: Predict label for each unlabeled chapter of movelets using *Movelet_Pred*
+
+STEP 4: Validate results using *Movelet_Validation*
+
+Example:
+
+```{r, eval = FALSE}
+data.Sample5 <- Acceleration_Create("data_label.csv",subjectName="Sample5",frequency=30)
+Ch.sedentary_act.Sample5 <- Movelet_Create(5701,5761,data.Sample5, "sedentary_act")
+pred <- Movelet_Pred(data.Sample5,Act.Names=c("sedentary_act"),vote=TRUE)
+validation <- Movelet_Validation(data.Sample5, Prediction = pred, Act.Names=c("sedentary_act"))
+```
+
+## Try movelet with patient 52
+
+<!-- ### Using 3 accel variables -->
+
+```{r,eval=FALSE, echo = FALSE}
+movelet.dat <- dat[,c("accel_x_coord","accel_y_coord","accel_z_coord","ActivityName","Wrist_Location")]
+#movelet.dat <- dat[,c("rotate_x_coord","rotate_y_coord","rotate_z_coord","ActivityName","Wrist_Location")]
+movelet.dat$ActivityName <- gsub(" ", "_", movelet.dat$ActivityName)
+
+## select right wrist
+movelet.dat.right <- subset(movelet.dat, Wrist_Location =="right     ")
+
+## create accel data 
+patient.52 <- Acceleration_Create(movelet.dat.right,subjectName="patient52",frequency=300) #3 variables * 100 hz
+#print.AcceleData(patient.52)
+
+## Train Open_Water_Bottle_and_Take_a_Drink chapter
+from <- min(which(patient.52$Label == "Open_Water_Bottle_and_Take_a_Drink"))
+to <- max(which(patient.52$Label == "Open_Water_Bottle_and_Take_a_Drink"))
+Ch.Open_Water_Bottle_and_Take_a_Drink.patient52 <- Movelet_Create(FROM = from ,TO = to, 
+                                                                  DATA = patient.52, 
+                                                      ChapName = "Open_Water_Bottle_and_Take_a_Drink")
+## Train walk chapter
+from <- min(which(patient.52$Label == "Walk"))
+to <- max(which(patient.52$Label == "Walk"))
+Ch.Walk.patient52 <- Movelet_Create(FROM = from ,TO = to, 
+                                    DATA = patient.52, 
+                                    ChapName = "Walk")
+## Train Pour_Water_into_a_Cup chapter
+from <- min(which(patient.52$Label == "Pour_Water_into_a_Cup"))
+to <- max(which(patient.52$Label == "Pour_Water_into_a_Cup"))
+Ch.Pour_Water_into_a_Cup.patient52 <- Movelet_Create(FROM = from ,TO = to, 
+                                    DATA = patient.52, 
+                                    ChapName = "Pour_Water_into_a_Cup")
+## train Look_around_in_bag_or_purse chapter
+from <- min(which(patient.52$Label == "Look_around_in_bag_or_purse"))
+to <- max(which(patient.52$Label == "Look_around_in_bag_or_purse"))
+Ch.Look_around_in_bag_or_purse.patient52 <- Movelet_Create(FROM = from ,TO = to, 
+                                    DATA = patient.52, 
+                                    ChapName = "Look_around_in_bag_or_purse")
+## train eat from bag chapter
+from <- min(which(patient.52$Label == "Eat_From_Bag"))
+to <- max(which(patient.52$Label == "Eat_From_Bag"))
+Ch.Eat_From_Bag.patient52 <- Movelet_Create(FROM = from ,TO = to, 
+                                    DATA = patient.52, 
+                                    ChapName = "Eat_From_Bag")
+
+## train open water bottle chapter
+from <- min(which(patient.52$Label == "9._Med_Taking")) + 100 ## 12:11:39 picks up water bottle to uncap
+to <- max(which(patient.52$Label == "9._Med_Taking")) + 300 ## 12:11:41 returns opened water bottle to table
+Ch.Open_water_bottle.patient52 <- Movelet_Create(FROM = from ,TO = to, 
+                                    DATA = patient.52, 
+                                    ChapName = "Open_water_bottle")
+
+## train pick up and open a pill bottle chapter
+from <- min(which(patient.52$Label == "9._Med_Taking")) + 400 ## 12:11:42 picks up pill bottle
+to <- max(which(patient.52$Label == "9._Med_Taking")) + 800 ## 112:11:46 pours pill out into left hand
+Ch.Pick_up_and_open_a_pill_bottle.patient52 <- Movelet_Create(FROM = from ,TO = to, 
+                                    DATA = patient.52, 
+                                    ChapName = "Pick_up_and_open_a_pill_bottle")
+## train pour pill chapter
+from <- min(which(patient.52$Label == "9._Med_Taking")) + 800 ## 12:11:46
+to <- max(which(patient.52$Label == "9._Med_Taking")) + 900 ## 12:11:47
+Ch.Pour_pill.patient52 <- Movelet_Create(FROM = from ,TO = to, 
+                                    DATA = patient.52, 
+                                    ChapName = "Pour_pill")
+
+## train take pill chapter 
+from <- min(which(patient.52$Label == "9._Med_Taking")) + 900 ## 12:11:47 
+to <- max(which(patient.52$Label == "9._Med_Taking")) + 1000 ## 112:11:48
+Ch.Take_pill.patient52 <- Movelet_Create(FROM = from ,TO = to, 
+                                    DATA = patient.52, 
+                                    ChapName = "Take_pill")
+
+## train Wash_Hands chapter
+from <- min(which(patient.52$Label == "Wash_Hands"))
+to <- max(which(patient.52$Label == "Wash_Hands"))
+Ch.Wash_Hands.patient52 <- Movelet_Create(FROM = from ,TO = to, 
+                                    DATA = patient.52, 
+                                    ChapName = "Wash_Hands")
+
+## test data
+test.dat <- subset(movelet.dat, ActivityName %in% c("Turn_Key","Open_Door","6._Med_Taking","7._Med_Taking") & Wrist_Location =="right     ")
+test.dat.patient.52 <- Acceleration_Create(test.dat,subjectName="patient52",frequency=300) #3 variables * 100 hz
+
+time.test<- as.numeric(row.names(test.dat))
+  
+#pred <- Movelet_Pred(test.dat.patient.52, Act.Names=c("Open_water_bottle","Pick_up_and_open_a_pill_bottle","Pour_pill","Take_pill","Eat_From_Bag"), vote=TRUE)
+
+train.label=c( "Open_water_bottle","Pick_up_and_open_a_pill_bottle","Pour_pill","Take_pill","Eat_From_Bag","Pour_Water_into_a_Cup",'Walk','Wash_Hands','Look_around_in_bag_or_purse')
+
+#expand the prediction activity labels to include all trained chapters
+#pred <- Movelet_Pred(test.dat.patient.52, Act.Names=train.label, vote=TRUE)
+# Save it
+#saveRDS(pred, file = "patient52_3accels_pred.rds")
+# load it
+patient52_3accels_pred <- readRDS(file = "patient52_3accels_pred.rds")
+#names(patient52_3accels_pred$Pred)
+##plot the trained vs. observed labels
+# dygraph(data=c(dat[time.test,c('time',names(dat)[c(11:13,30)])],pred$Pred),main=paste('Patient', dat$PatientID[1],' Rotation Right Wrist',sep=''))%>% 
+#   dyAxis("x", drawGrid = FALSE) %>%
+#   dyOptions(colors = RColorBrewer::brewer.pal(7, "Set1"))  %>%
+#   dyRangeSelector()
+
+
+table(patient52_3accels_pred$Pred)
+#dim(test.dat)
+
+time <- seq(1,length(patient52_3accels_pred$Pred))
+plot(x = patient52_3accels_pred$Pred , y = time, xlab = "Prediction", ylab = "Time", xaxt = "n", pch = 20)
+axis(1, at=seq(1,length(train.label)), labels= FALSE)
+text(seq(1,length(train.label)),par("usr")[3] - 100, labels = train.label, srt = 45, xpd = TRUE, cex = 0.5, adj = c(1,0))
+text(x = 1.5, y = 90, "Open_Door", cex = 0.5)
+abline(h = max(which(test.dat$ActivityName == "Open_Door")), col="red")
+text(x = 1.5, y = 300, "Turn_Key", cex = 0.5)
+abline(h = max(which(test.dat$ActivityName == "Turn_Key")), col="red")
+text(x = 1.5, y = 600, "Pick_up_and_open_a_pill_bottle", cex = 0.5)
+abline(h = min(which(test.dat$ActivityName == "6._Med_Taking") + 400), col="red")
+text(x = 1.5, y = 920, "Take_pill", cex = 0.5)
+abline(h = min(which(test.dat$ActivityName == "6._Med_Taking") + 500), col="red")
+text(x = 1.5, y = 1080, "Drink_water", cex = 0.5)
+abline(h = min(which(test.dat$ActivityName == "6._Med_Taking") + 650), col="red")
+text(x = 1.5, y = 1300, "Pick_up_and_open_a_water_bottle_and_put_it_down", cex = 0.5)
+abline(h = min(which(test.dat$ActivityName == "7._Med_Taking") + 250), col="red")
+text(x = 1.5, y = 1900, "Pick_up_and_open_a_pill_bottle_and_take_pill", cex = 0.5)
+abline(h = min(which(test.dat$ActivityName == "7._Med_Taking") + 650), col="red")
+text(x = 1.5, y = 2100, "Drink_water", cex = 0.5)
+
+
+# abline(v=100, col="blue") ## pick up and open water bottle
+# abline(v=500, col="blue") ## pick up and open pill bottle
+# abline(v=900, col="blue") ## pour pill 
+# abline(v=1200, col="blue") ## take pill 
+# abline(v=1300, col="blue") ## pick water bottle and drink  
+# abline(v=1600, col="blue") ## end
+# text(x = 300, y = 4, "pick/open water bottle", cex = 0.5)
+# text(x = 700, y = 4, "pick/open pill bottle", cex = 0.5)
+# text(x = 1000, y = 4, "pour pill", cex = 0.5)
+# text(x = 1250, y = 4, "take pill", cex = 0.5)
+# text(x = 1500, y = 4, "pick/drink water bottle", cex = 0.5)
+
+
+# table(pred$Pred) # 1 = Open_a_pill_bottle_and_take_a_pilll; 3= Wash_Hands
+# 
+#    1    3 
+# 2130 3136 
+# > length(pred$Pred)
+# [1] 5266
+# > length(which(patient.52$Label=="8._Med_Taking"))
+# [1] 2281
+# > length(which(patient.52$Label=="Wash_Hands"))
+# [1] 3284
+
+#validation <- Movelet_Validation(test.dat.patient.52, Prediction = pred$Pred, Act.Names = c("Walk","Open_Water_Bottle_and_Take_a_Drink"))
+
+```
+
+<!-- ### Using 3 rotation variables -->
+
+```{r,eval=FALSE, echo = FALSE}
+#movelet.dat <- dat[,c("accel_x_coord","accel_y_coord","accel_z_coord","ActivityName")]
+movelet.dat <- dat[,c("rotate_x_coord","rotate_y_coord","rotate_z_coord","ActivityName","Wrist_Location")]
+movelet.dat$ActivityName <- gsub(" ", "_", movelet.dat$ActivityName)
+
+## select right wrist
+movelet.dat.right <- subset(movelet.dat, Wrist_Location =="right     ")
+
+## create accel data 
+patient.52 <- Acceleration_Create(movelet.dat.right,subjectName="patient52",frequency=300) #3 variables * 100 hz
+#print.AcceleData(patient.52)
+
+## Train Open_Water_Bottle_and_Take_a_Drink chapter
+from <- min(which(patient.52$Label == "Open_Water_Bottle_and_Take_a_Drink"))
+to <- max(which(patient.52$Label == "Open_Water_Bottle_and_Take_a_Drink"))
+Ch.Open_Water_Bottle_and_Take_a_Drink.patient52 <- Movelet_Create(FROM = from ,TO = to, 
+                                                                  DATA = patient.52, 
+                                                      ChapName = "Open_Water_Bottle_and_Take_a_Drink")
+## Train walk chapter
+from <- min(which(patient.52$Label == "Walk"))
+to <- max(which(patient.52$Label == "Walk"))
+Ch.Walk.patient52 <- Movelet_Create(FROM = from ,TO = to, 
+                                    DATA = patient.52, 
+                                    ChapName = "Walk")
+## Train Pour_Water_into_a_Cup chapter
+from <- min(which(patient.52$Label == "Pour_Water_into_a_Cup"))
+to <- max(which(patient.52$Label == "Pour_Water_into_a_Cup"))
+Ch.Pour_Water_into_a_Cup.patient52 <- Movelet_Create(FROM = from ,TO = to, 
+                                    DATA = patient.52, 
+                                    ChapName = "Pour_Water_into_a_Cup")
+## train Look_around_in_bag_or_purse chapter
+from <- min(which(patient.52$Label == "Look_around_in_bag_or_purse"))
+to <- max(which(patient.52$Label == "Look_around_in_bag_or_purse"))
+Ch.Look_around_in_bag_or_purse.patient52 <- Movelet_Create(FROM = from ,TO = to, 
+                                    DATA = patient.52, 
+                                    ChapName = "Look_around_in_bag_or_purse")
+## train eat from bag chapter
+from <- min(which(patient.52$Label == "Eat_From_Bag"))
+to <- max(which(patient.52$Label == "Eat_From_Bag"))
+Ch.Eat_From_Bag.patient52 <- Movelet_Create(FROM = from ,TO = to, 
+                                    DATA = patient.52, 
+                                    ChapName = "Eat_From_Bag")
+
+## train open water bottle chapter
+from <- min(which(patient.52$Label == "9._Med_Taking")) + 100 ## 12:11:39 picks up water bottle to uncap
+to <- max(which(patient.52$Label == "9._Med_Taking")) + 300 ## 12:11:41 returns opened water bottle to table
+Ch.Open_water_bottle.patient52 <- Movelet_Create(FROM = from ,TO = to, 
+                                    DATA = patient.52, 
+                                    ChapName = "Open_water_bottle")
+
+## train pick up and open a pill bottle chapter
+from <- min(which(patient.52$Label == "9._Med_Taking")) + 400 ## 12:11:42 picks up pill bottle
+to <- max(which(patient.52$Label == "9._Med_Taking")) + 800 ## 112:11:46 pours pill out into left hand
+Ch.Pick_up_and_open_a_pill_bottle.patient52 <- Movelet_Create(FROM = from ,TO = to, 
+                                    DATA = patient.52, 
+                                    ChapName = "Pick_up_and_open_a_pill_bottle")
+## train pour pill chapter
+from <- min(which(patient.52$Label == "9._Med_Taking")) + 800 ## 12:11:46
+to <- max(which(patient.52$Label == "9._Med_Taking")) + 900 ## 12:11:47
+Ch.Pour_pill.patient52 <- Movelet_Create(FROM = from ,TO = to, 
+                                    DATA = patient.52, 
+                                    ChapName = "Pour_pill")
+
+## train take pill chapter 
+from <- min(which(patient.52$Label == "9._Med_Taking")) + 900 ## 12:11:47 
+to <- max(which(patient.52$Label == "9._Med_Taking")) + 1000 ## 112:11:48
+Ch.Take_pill.patient52 <- Movelet_Create(FROM = from ,TO = to, 
+                                    DATA = patient.52, 
+                                    ChapName = "Take_pill")
+
+## train Wash_Hands chapter
+from <- min(which(patient.52$Label == "Wash_Hands"))
+to <- max(which(patient.52$Label == "Wash_Hands"))
+Ch.Wash_Hands.patient52 <- Movelet_Create(FROM = from ,TO = to, 
+                                    DATA = patient.52, 
+                                    ChapName = "Wash_Hands")
+
+## test data
+test.dat <- subset(movelet.dat, ActivityName %in% c("Turn_Key","Open_Door","6._Med_Taking","7._Med_Taking") & Wrist_Location =="right     ")
+test.dat.patient.52 <- Acceleration_Create(test.dat,subjectName="patient52",frequency=300) #3 variables * 100 hz
+
+time.test<- as.numeric(row.names(test.dat))
+  
+#pred <- Movelet_Pred(test.dat.patient.52, Act.Names=c("Open_water_bottle","Pick_up_and_open_a_pill_bottle","Pour_pill","Take_pill","Eat_From_Bag"), vote=TRUE)
+
+train.label=c( "Open_water_bottle","Pick_up_and_open_a_pill_bottle","Pour_pill","Take_pill","Eat_From_Bag","Pour_Water_into_a_Cup",'Walk','Wash_Hands','Look_around_in_bag_or_purse')
+
+#expand the prediction activity labels to include all trained chapters
+#pred <- Movelet_Pred(test.dat.patient.52, Act.Names=train.label, vote=TRUE)
+# Save it
+#saveRDS(pred, file = "patient52_3rotations_pred.rds")
+# load it
+patient52_3rotations_pred <- readRDS(file = "patient52_3rotations_pred.rds")
+#names(patient52_3rotations_pred$Pred)
+
+
+##plot the trained vs. observed labels
+# dygraph(data=c(dat[time.test,c('time',names(dat)[c(11:13,30)])],pred$Pred),main=paste('Patient', dat$PatientID[1],' Rotation Right Wrist',sep=''))%>% 
+#   dyAxis("x", drawGrid = FALSE) %>%
+#   dyOptions(colors = RColorBrewer::brewer.pal(7, "Set1"))  %>%
+#   dyRangeSelector()
+
+
+table(patient52_3rotations_pred$Pred)
+#dim(test.dat)
+
+time <- seq(1,length(patient52_3rotations_pred$Pred))
+plot(x = patient52_3rotations_pred$Pred , y = time, xlab = "Prediction", ylab = "Time", xaxt = "n", pch = 20)
+axis(1, at=seq(1,length(train.label)), labels= FALSE)
+text(seq(1,length(train.label)),par("usr")[3] - 100, labels = train.label, srt = 45, xpd = TRUE, cex = 0.5, adj = c(1,0))
+
+text(x = 7, y = 90, "Open_Door", cex = 0.5)
+abline(h = max(which(test.dat$ActivityName == "Open_Door")), col="red")
+text(x = 7, y = 300, "Turn_Key", cex = 0.5)
+abline(h = max(which(test.dat$ActivityName == "Turn_Key")), col="red")
+text(x = 7, y = 600, "Pick_up_and_open_a_pill_bottle", cex = 0.5)
+abline(h = min(which(test.dat$ActivityName == "6._Med_Taking") + 400), col="red")
+text(x = 7, y = 920, "Take_pill", cex = 0.5)
+abline(h = min(which(test.dat$ActivityName == "6._Med_Taking") + 500), col="red")
+text(x = 7, y = 1080, "Drink_water", cex = 0.5)
+abline(h = min(which(test.dat$ActivityName == "6._Med_Taking") + 650), col="red")
+text(x = 7, y = 1300, "Pick_up_and_open_a_water_bottle_and_put_it_down", cex = 0.5)
+abline(h = min(which(test.dat$ActivityName == "7._Med_Taking") + 250), col="red")
+text(x = 7, y = 1900, "Pick_up_and_open_a_pill_bottle_and_take_pill", cex = 0.5)
+abline(h = min(which(test.dat$ActivityName == "7._Med_Taking") + 650), col="red")
+text(x = 7, y = 2100, "Drink_water", cex = 0.5)
+
+```
+
+<!-- ### Using 3 attitude variables -->
+
+```{r,eval=FALSE, echo = FALSE}
+movelet.dat <- dat[,c("attitude_x_coord","attitude_y_coord","attitude_z_coord","ActivityName","Wrist_Location")]
+movelet.dat$ActivityName <- gsub(" ", "_", movelet.dat$ActivityName)
+
+## select right wrist
+movelet.dat.right <- subset(movelet.dat, Wrist_Location =="right     ")
+
+## create accel data 
+patient.52 <- Acceleration_Create(movelet.dat.right,subjectName="patient52",frequency=300) #3 variables * 100 hz
+#print.AcceleData(patient.52)
+
+## Train Open_Water_Bottle_and_Take_a_Drink chapter
+from <- min(which(patient.52$Label == "Open_Water_Bottle_and_Take_a_Drink"))
+to <- max(which(patient.52$Label == "Open_Water_Bottle_and_Take_a_Drink"))
+Ch.Open_Water_Bottle_and_Take_a_Drink.patient52 <- Movelet_Create(FROM = from ,TO = to, 
+                                                                  DATA = patient.52, 
+                                                      ChapName = "Open_Water_Bottle_and_Take_a_Drink")
+## Train walk chapter
+from <- min(which(patient.52$Label == "Walk"))
+to <- max(which(patient.52$Label == "Walk"))
+Ch.Walk.patient52 <- Movelet_Create(FROM = from ,TO = to, 
+                                    DATA = patient.52, 
+                                    ChapName = "Walk")
+## Train Pour_Water_into_a_Cup chapter
+from <- min(which(patient.52$Label == "Pour_Water_into_a_Cup"))
+to <- max(which(patient.52$Label == "Pour_Water_into_a_Cup"))
+Ch.Pour_Water_into_a_Cup.patient52 <- Movelet_Create(FROM = from ,TO = to, 
+                                    DATA = patient.52, 
+                                    ChapName = "Pour_Water_into_a_Cup")
+## train Look_around_in_bag_or_purse chapter
+from <- min(which(patient.52$Label == "Look_around_in_bag_or_purse"))
+to <- max(which(patient.52$Label == "Look_around_in_bag_or_purse"))
+Ch.Look_around_in_bag_or_purse.patient52 <- Movelet_Create(FROM = from ,TO = to, 
+                                    DATA = patient.52, 
+                                    ChapName = "Look_around_in_bag_or_purse")
+## train eat from bag chapter
+from <- min(which(patient.52$Label == "Eat_From_Bag"))
+to <- max(which(patient.52$Label == "Eat_From_Bag"))
+Ch.Eat_From_Bag.patient52 <- Movelet_Create(FROM = from ,TO = to, 
+                                    DATA = patient.52, 
+                                    ChapName = "Eat_From_Bag")
+
+## train open water bottle chapter
+from <- min(which(patient.52$Label == "9._Med_Taking")) + 100 ## 12:11:39 picks up water bottle to uncap
+to <- max(which(patient.52$Label == "9._Med_Taking")) + 300 ## 12:11:41 returns opened water bottle to table
+Ch.Open_water_bottle.patient52 <- Movelet_Create(FROM = from ,TO = to, 
+                                    DATA = patient.52, 
+                                    ChapName = "Open_water_bottle")
+
+## train pick up and open a pill bottle chapter
+from <- min(which(patient.52$Label == "9._Med_Taking")) + 400 ## 12:11:42 picks up pill bottle
+to <- max(which(patient.52$Label == "9._Med_Taking")) + 800 ## 112:11:46 pours pill out into left hand
+Ch.Pick_up_and_open_a_pill_bottle.patient52 <- Movelet_Create(FROM = from ,TO = to, 
+                                    DATA = patient.52, 
+                                    ChapName = "Pick_up_and_open_a_pill_bottle")
+## train pour pill chapter
+from <- min(which(patient.52$Label == "9._Med_Taking")) + 800 ## 12:11:46
+to <- max(which(patient.52$Label == "9._Med_Taking")) + 900 ## 12:11:47
+Ch.Pour_pill.patient52 <- Movelet_Create(FROM = from ,TO = to, 
+                                    DATA = patient.52, 
+                                    ChapName = "Pour_pill")
+
+## train take pill chapter 
+from <- min(which(patient.52$Label == "9._Med_Taking")) + 900 ## 12:11:47 
+to <- max(which(patient.52$Label == "9._Med_Taking")) + 1000 ## 112:11:48
+Ch.Take_pill.patient52 <- Movelet_Create(FROM = from ,TO = to, 
+                                    DATA = patient.52, 
+                                    ChapName = "Take_pill")
+
+## train Wash_Hands chapter
+from <- min(which(patient.52$Label == "Wash_Hands"))
+to <- max(which(patient.52$Label == "Wash_Hands"))
+Ch.Wash_Hands.patient52 <- Movelet_Create(FROM = from ,TO = to, 
+                                    DATA = patient.52, 
+                                    ChapName = "Wash_Hands")
+
+## test data
+test.dat <- subset(movelet.dat, ActivityName %in% c("Turn_Key","Open_Door","6._Med_Taking","7._Med_Taking") & Wrist_Location =="right     ")
+test.dat.patient.52 <- Acceleration_Create(test.dat,subjectName="patient52",frequency=300) #3 variables * 100 hz
+
+time.test<- as.numeric(row.names(test.dat))
+  
+#pred <- Movelet_Pred(test.dat.patient.52, Act.Names=c("Open_water_bottle","Pick_up_and_open_a_pill_bottle","Pour_pill","Take_pill","Eat_From_Bag"), vote=TRUE)
+
+train.label=c( "Open_water_bottle","Pick_up_and_open_a_pill_bottle","Pour_pill","Take_pill","Eat_From_Bag","Pour_Water_into_a_Cup",'Walk','Wash_Hands','Look_around_in_bag_or_purse')
+
+#expand the prediction activity labels to include all trained chapters
+#pred <- Movelet_Pred(test.dat.patient.52, Act.Names=train.label, vote=TRUE)
+# Save it
+#saveRDS(pred, file = "patient52_3attitudes_pred.rds")
+# load it
+patient52_3attitudes_pred <- readRDS(file = "patient52_3attitudes_pred.rds")
+#names(patient52_3rotations_pred$Pred)
+
+
+##plot the trained vs. observed labels
+# dygraph(data=c(dat[time.test,c('time',names(dat)[c(11:13,30)])],pred$Pred),main=paste('Patient', dat$PatientID[1],' Rotation Right Wrist',sep=''))%>% 
+#   dyAxis("x", drawGrid = FALSE) %>%
+#   dyOptions(colors = RColorBrewer::brewer.pal(7, "Set1"))  %>%
+#   dyRangeSelector()
+
+
+table(patient52_3attitudes_pred$Pred)
+#dim(test.dat)
+
+time <- seq(1,length(patient52_3attitudes_pred$Pred))
+plot(x = patient52_3attitudes_pred$Pred , y = time, xlab = "Prediction", ylab = "Time", xaxt = "n", pch = 20)
+axis(1, at=seq(1,length(train.label)), labels= FALSE)
+text(seq(1,length(train.label)),par("usr")[3] - 100, labels = train.label, srt = 45, xpd = TRUE, cex = 0.5, adj = c(1,0))
+text(x = 6, y = 90, "Open_Door", cex = 0.5)
+abline(h = max(which(test.dat$ActivityName == "Open_Door")), col="red")
+text(x = 6, y = 300, "Turn_Key", cex = 0.5)
+abline(h = max(which(test.dat$ActivityName == "Turn_Key")), col="red")
+text(x = 6, y = 600, "Pick_up_and_open_a_pill_bottle", cex = 0.5)
+abline(h = min(which(test.dat$ActivityName == "6._Med_Taking") + 400), col="red")
+text(x = 6, y = 920, "Take_pill", cex = 0.5)
+abline(h = min(which(test.dat$ActivityName == "6._Med_Taking") + 500), col="red")
+text(x = 6, y = 1080, "Drink_water", cex = 0.5)
+abline(h = min(which(test.dat$ActivityName == "6._Med_Taking") + 650), col="red")
+text(x = 6, y = 1300, "Pick_up_and_open_a_water_bottle_and_put_it_down", cex = 0.5)
+abline(h = min(which(test.dat$ActivityName == "7._Med_Taking") + 250), col="red")
+text(x = 6, y = 1900, "Pick_up_and_open_a_pill_bottle_and_take_pill", cex = 0.5)
+abline(h = min(which(test.dat$ActivityName == "7._Med_Taking") + 650), col="red")
+text(x = 6, y = 2100, "Drink_water", cex = 0.5)
+
+```
+
+<!-- ### Using 6 variables (3 accels, 3 rotations) -->
+
+```{r, echo = FALSE}
+####### Modify movelet_dist to use more variables
+## modify movelet packages to have more axes
+Acceleration_Create2=function(Data,subjectName,frequency,n_axes,label=TRUE)
+{
+  if (label==FALSE)
+  {Result=list(Subject=subjectName,N=nrow(Data),SampleRate=frequency,Data=Data[,c(1:n_axes)])}
+  else {Result=list(Subject=subjectName,N=nrow(Data),SampleRate=frequency,Data=Data[,c(1:n_axes)],Label=Data[,n_axes+1])}
+  class(Result)="AcceleData"
+  return(Result)
+}
+
+Movelet_Create2=function(FROM, TO, DATA, ChapName, n_axes, Length=NULL)
+{
+  if (is.null(Length)==TRUE)
+  {
+    Length=DATA$SampleRate
+  }
+  # define dimension of the movelet collection (number of movelets per collection)
+  Dim.Collection = TO-Length+1-FROM+1
+  
+  # make sure there the time between first and last is greater than Length
+  if(Dim.Collection < 1){stop("Movelet length longer than time used")}
+  
+  # construct dictionary
+  # Collection=list(AX1=array(0,c(Dim.Collection,Length)),
+  #                 AX2=array(0,c(Dim.Collection,Length)),
+  #                 AX3=array(0,c(Dim.Collection,Length)))
+  #n_axes <- 6
+  Collection <- list()
+  for(i in 1:n_axes){
+    name <- paste('AX',i,sep='')
+    tmp <- array(0,c(Dim.Collection,Length))
+    Collection[[name]] <- tmp
+  }
+  
+  temp=c(1:(TO-FROM+1))
+  IndexMatrix=c()
+  for (t in (0:(Length-1)))
+  {
+    IndexMatrix=c(IndexMatrix,temp[(1+t):(length(temp)-(Length-t)+1)])
+  }
+  for (j in 1:n_axes)
+  {
+    Collection[[j]]=matrix(DATA$Data[IndexMatrix+FROM-1,j],ncol=Length)
+  }
+  Result=list(Subject=DATA$Subject,Chapter=ChapName,Length=Length,SampleRate=DATA$SampleRate,MvltNum=Dim.Collection,From=FROM, To=TO, Movelet=Collection,Data=DATA$Data[ifelse(FROM-50>0,FROM-50,FROM):ifelse(TO+50<nrow(DATA$Data),TO+50,TO),])
+  class(Result)="MvltChap"
+  return(Result)
+}  
+## modify movelet_dist
+Movelet_Dist2=function(Chapter, Unlabeled, index=FALSE)
+{
+  # Check if the class of "Chapter" is MvltChap
+  if(class(Chapter)!="MvltChap"){stop("Please use appropriate object for Chapter")}
+  # Check if the class of "Unlabeled" is AcceleData
+  if(class(Unlabeled)!="AcceleData"){stop("Please use appropriate object for Unlabeled")}  
+  N = Unlabeled$N				# length of unlabeled timeseries
+  Length = Chapter$Length 	# length of movelets in chapter
+  N_Chapter=Chapter$MvltNum	# number of chapter elements
+  
+  # decompose unlabeled timeseries into movelets
+  Unlabeled_Movelets=Movelet_Create2(FROM=1, TO=N, DATA=Unlabeled, 
+                                     Length=Length, n_axes = 6, ChapName="Unlabeled")
+  
+  N_Sample=Unlabeled_Movelets$MvltNum	# number of unlabeled movelets
+  Distance=array(0,c(N_Sample,N_Chapter))
+  for (i in 1:N_Chapter)
+  {
+    Dist1=sqrt(apply((t(t(Unlabeled_Movelets$Movelet$AX1)-Chapter$Movelet$AX1[i,]))^2,1,sum))
+    Dist2=sqrt(apply((t(t(Unlabeled_Movelets$Movelet$AX2)-Chapter$Movelet$AX2[i,]))^2,1,sum))
+    Dist3=sqrt(apply((t(t(Unlabeled_Movelets$Movelet$AX3)-Chapter$Movelet$AX3[i,]))^2,1,sum))
+    Dist4=sqrt(apply((t(t(Unlabeled_Movelets$Movelet$AX4)-Chapter$Movelet$AX4[i,]))^2,1,sum))
+    Dist5=sqrt(apply((t(t(Unlabeled_Movelets$Movelet$AX5)-Chapter$Movelet$AX5[i,]))^2,1,sum))
+    Dist6=sqrt(apply((t(t(Unlabeled_Movelets$Movelet$AX6)-Chapter$Movelet$AX6[i,]))^2,1,sum))
+    Dist=(Dist1+Dist2+Dist3+Dist4+Dist5+Dist6)/6
+    Distance[,i]=Dist
+  }
+  Result=array(0,c(2,N_Sample))
+  Result[1,]=apply(Distance,1,which.min)
+  Result[2,]=apply(Distance,1,min)
+  if (index==FALSE)
+  {
+    return(Result[2,])
+  } else 
+  {
+    return(Result)
+  }
+}
+
+Movelet_Pred2=function(x,Act.Names,vote=FALSE)
+{
+  Ch.Names = paste("Ch.", Act.Names, ".",x$Subject,sep="")
+  Distance = c()
+  Length=get(Ch.Names[1])$Length
+  for(i in 1:length(Act.Names))
+  {
+    Distance = cbind(Distance, Movelet_Dist2(get(Ch.Names[i]),x))
+  }
+  
+  Distance=as.data.frame(Distance)
+  colnames(Distance) = Act.Names
+  
+  ## estimate predicited activity as using the minimum distance
+  Predicted.Labels=sapply(1:dim(Distance)[1], function(u) which.min(Distance[u,]))
+  Result=Predicted.Labels
+  ## Voting ##
+  if (vote==TRUE)
+  {
+    for (i in 1:length(Predicted.Labels))
+    {
+      Start=max(1,i-Length+1)
+      End=min(length(Predicted.Labels),i)
+      Table=table(Predicted.Labels[Start:End])
+      #       W=1
+      #       Table[which(as.character(Predicted.Labels[Start+3])==names(table(Predicted.Labels[Start:End])))]=Table[which(as.character(Predicted.Labels[Start+3])==names(table(Predicted.Labels[Start:End])))]+W
+      #       Table[which(as.character(Predicted.Labels[Start+4])==names(table(Predicted.Labels[Start:End])))]=Table[which(as.character(Predicted.Labels[Start+4])==names(table(Predicted.Labels[Start:End])))]+W
+      #       Table[which(as.character(Predicted.Labels[Start+5])==names(table(Predicted.Labels[Start:End])))]=Table[which(as.character(Predicted.Labels[Start+5])==names(table(Predicted.Labels[Start:End])))]+W
+      #       Table[which(as.character(Predicted.Labels[Start+6])==names(table(Predicted.Labels[Start:End])))]=Table[which(as.character(Predicted.Labels[Start+6])==names(table(Predicted.Labels[Start:End])))]+W
+      Result[i]=as.numeric(names(which.max(Table)))
+    }
+  }
+  return(list(Dist=Distance, Pred=Result))  
+}
+```
+
+
+```{r, eval = FALSE, echo = FALSE}
+movelet.dat <- dat[,c("accel_x_coord","accel_y_coord","accel_z_coord",
+                      "rotate_x_coord","rotate_y_coord","rotate_z_coord",
+                      "ActivityName","Wrist_Location")]
+movelet.dat$ActivityName <- gsub(" ", "_", movelet.dat$ActivityName)
+## select right wrist
+movelet.dat.right <- subset(movelet.dat, Wrist_Location =="right     ")
+## create accel data 
+patient.52 <- Acceleration_Create2(movelet.dat.right,subjectName="patient52",
+                                   n_axes = 6,frequency=100) # 6 variables * 100 hz = 600?? 
+## Train Open_Water_Bottle_and_Take_a_Drink chapter
+from <- min(which(patient.52$Label == "Open_Water_Bottle_and_Take_a_Drink"))
+to <- max(which(patient.52$Label == "Open_Water_Bottle_and_Take_a_Drink"))
+Ch.Open_Water_Bottle_and_Take_a_Drink.patient52 <- Movelet_Create2(FROM = from ,TO = to, 
+                                                                  DATA = patient.52, n_axes = 6,
+                                                      ChapName = "Open_Water_Bottle_and_Take_a_Drink")
+## Train walk chapter
+from <- min(which(patient.52$Label == "Walk"))
+to <- max(which(patient.52$Label == "Walk"))
+Ch.Walk.patient52 <- Movelet_Create2(FROM = from ,TO = to, 
+                                    DATA = patient.52, n_axes = 6,
+                                    ChapName = "Walk")
+## Train Pour_Water_into_a_Cup chapter
+from <- min(which(patient.52$Label == "Pour_Water_into_a_Cup"))
+to <- max(which(patient.52$Label == "Pour_Water_into_a_Cup"))
+Ch.Pour_Water_into_a_Cup.patient52 <- Movelet_Create2(FROM = from ,TO = to, 
+                                    DATA = patient.52, n_axes = 6,
+                                    ChapName = "Pour_Water_into_a_Cup")
+## train Look_around_in_bag_or_purse chapter
+from <- min(which(patient.52$Label == "Look_around_in_bag_or_purse"))
+to <- max(which(patient.52$Label == "Look_around_in_bag_or_purse"))
+Ch.Look_around_in_bag_or_purse.patient52 <- Movelet_Create2(FROM = from ,TO = to, 
+                                    DATA = patient.52, n_axes = 6, 
+                                    ChapName = "Look_around_in_bag_or_purse")
+## train eat from bag chapter
+from <- min(which(patient.52$Label == "Eat_From_Bag"))
+to <- max(which(patient.52$Label == "Eat_From_Bag"))
+Ch.Eat_From_Bag.patient52 <- Movelet_Create2(FROM = from ,TO = to, 
+                                    DATA = patient.52, n_axes = 6,
+                                    ChapName = "Eat_From_Bag")
+
+## train open water bottle chapter
+from <- min(which(patient.52$Label == "9._Med_Taking")) + 100 ## 12:11:39 picks up water bottle to uncap
+to <- max(which(patient.52$Label == "9._Med_Taking")) + 300 ## 12:11:41 returns opened water bottle to table
+Ch.Open_water_bottle.patient52 <- Movelet_Create2(FROM = from ,TO = to, 
+                                    DATA = patient.52, n_axes = 6,
+                                    ChapName = "Open_water_bottle")
+
+## train pick up and open a pill bottle chapter
+from <- min(which(patient.52$Label == "9._Med_Taking")) + 400 ## 12:11:42 picks up pill bottle
+to <- max(which(patient.52$Label == "9._Med_Taking")) + 800 ## 112:11:46 pours pill out into left hand
+Ch.Pick_up_and_open_a_pill_bottle.patient52 <- Movelet_Create2(FROM = from ,TO = to, 
+                                    DATA = patient.52, n_axes = 6,
+                                    ChapName = "Pick_up_and_open_a_pill_bottle")
+## train pour pill chapter
+from <- min(which(patient.52$Label == "9._Med_Taking")) + 800 ## 12:11:46
+to <- max(which(patient.52$Label == "9._Med_Taking")) + 900 ## 12:11:47
+Ch.Pour_pill.patient52 <- Movelet_Create2(FROM = from ,TO = to, 
+                                    DATA = patient.52, n_axes = 6,
+                                    ChapName = "Pour_pill")
+
+## train take pill chapter 
+from <- min(which(patient.52$Label == "9._Med_Taking")) + 900 ## 12:11:47 
+to <- max(which(patient.52$Label == "9._Med_Taking")) + 1000 ## 112:11:48
+Ch.Take_pill.patient52 <- Movelet_Create2(FROM = from ,TO = to, 
+                                    DATA = patient.52, n_axes = 6,
+                                    ChapName = "Take_pill")
+
+## train Wash_Hands chapter
+from <- min(which(patient.52$Label == "Wash_Hands"))
+to <- max(which(patient.52$Label == "Wash_Hands"))
+Ch.Wash_Hands.patient52 <- Movelet_Create2(FROM = from ,TO = to, 
+                                    DATA = patient.52, n_axes = 6,
+                                    ChapName = "Wash_Hands")
+
+## test data
+test.dat <- subset(movelet.dat, ActivityName %in% c("Turn_Key","Open_Door","6._Med_Taking","7._Med_Taking") & Wrist_Location =="right     ")
+test.dat.patient.52 <- Acceleration_Create2(test.dat,subjectName="patient52",n_axes = 6,frequency=100) #6 variables * 100 hz
+
+time.test<- as.numeric(row.names(test.dat))
+  
+#pred <- Movelet_Pred(test.dat.patient.52, Act.Names=c("Open_water_bottle","Pick_up_and_open_a_pill_bottle","Pour_pill","Take_pill","Eat_From_Bag"), vote=TRUE)
+
+train.label=c( "Open_water_bottle","Pick_up_and_open_a_pill_bottle","Pour_pill","Take_pill","Eat_From_Bag","Pour_Water_into_a_Cup",'Walk','Wash_Hands','Look_around_in_bag_or_purse')
+
+#expand the prediction activity labels to include all trained chapters
+#pred <- Movelet_Pred2(test.dat.patient.52, Act.Names=train.label, vote=TRUE)
+# Save it
+#saveRDS(pred, file = "patient52_6vars_pred.rds")
+# load it
+patient52_6vars_pred <- readRDS(file = "patient52_6vars_pred.rds")
+#names(patient52_3accels_pred$Pred)
+##plot the trained vs. observed labels
+# dygraph(data=c(dat[time.test,c('time',names(dat)[c(11:13,30)])],pred$Pred),main=paste('Patient', dat$PatientID[1],' Rotation Right Wrist',sep=''))%>% 
+#   dyAxis("x", drawGrid = FALSE) %>%
+#   dyOptions(colors = RColorBrewer::brewer.pal(7, "Set1"))  %>%
+#   dyRangeSelector()
+
+
+table(patient52_6vars_pred$Pred)
+#dim(test.dat)
+
+time <- seq(1,length(patient52_6vars_pred$Pred))
+plot(x = patient52_6vars_pred$Pred , y = time, xlab = "Prediction", ylab = "Time", xaxt = "n", pch = 20)
+axis(1, at=seq(1,length(train.label)), labels= FALSE)
+text(seq(1,length(train.label)),par("usr")[3] - 100, labels = train.label, srt = 45, xpd = TRUE, cex = 0.5, adj = c(1,0))
+text(x = 1.5, y = 90, "Open_Door", cex = 0.5)
+abline(h = max(which(test.dat$ActivityName == "Open_Door")), col="red")
+text(x = 1.5, y = 300, "Turn_Key", cex = 0.5)
+abline(h = max(which(test.dat$ActivityName == "Turn_Key")), col="red")
+text(x = 1.5, y = 600, "Pick_up_and_open_a_pill_bottle", cex = 0.5)
+abline(h = min(which(test.dat$ActivityName == "6._Med_Taking") + 400), col="red")
+text(x = 1.5, y = 920, "Take_pill", cex = 0.5)
+abline(h = min(which(test.dat$ActivityName == "6._Med_Taking") + 500), col="red")
+text(x = 1.5, y = 1080, "Drink_water", cex = 0.5)
+abline(h = min(which(test.dat$ActivityName == "6._Med_Taking") + 650), col="red")
+text(x = 1.5, y = 1300, "Pick_up_and_open_a_water_bottle_and_put_it_down", cex = 0.5)
+abline(h = min(which(test.dat$ActivityName == "7._Med_Taking") + 250), col="red")
+text(x = 1.5, y = 1900, "Pick_up_and_open_a_pill_bottle_and_take_pill", cex = 0.5)
+abline(h = min(which(test.dat$ActivityName == "7._Med_Taking") + 650), col="red")
+text(x = 1.5, y = 2100, "Drink_water", cex = 0.5)
+```
+
+
+
+<!-- ### Using 6 PCs for all 15 variables of right hands -->
+
+```{r,eval=FALSE, echo = FALSE}
+#names(dat)
+#### perform PCA on 15 variables of the right hand
+## recode the wrist location variable
+dat$Wrist_Location <- ifelse(dat$Wrist_Location =="right     ","right","left")
+table(dat$Wrist_Location)
+
+varss <- dat[dat$Wrist_Location =="right",c("accel_x_coord","accel_y_coord","accel_z_coord",
+                "rotate_x_coord","rotate_y_coord", "rotate_z_coord",
+                "gravity_x_coord","gravity_z_coord","gravity_y_coord",
+                "magneto_x_coord","magneto_y_coord","magneto_z_coord",
+                "attitude_x_coord","attitude_y_coord","attitude_z_coord")]
+varss.pca <- prcomp(varss, center=TRUE, scale.=TRUE)
+summary(varss.pca)
+pcs <- varss.pca$x[,1:6] ## the 6 PCs for movelet
+
+## check pc plots
+#fviz_pca_var(varss.pca,axes = c(1, 2))
+#fviz_pca_var(varss.pca,axes = c(3, 4))
+#fviz_pca_var(varss.pca,axes = c(5, 6))
+varss.pca$rotation[,1:6]
+```
+
+<!-- PC1 is mainly contributed by the 3 magneto measurements. Similarly, for PC2 we have gravity_y, gravity_z and attitude_y (some combination of the y-axes); PC3 we have gravity_x and attitude_x (some combination of the x-axes); PC4 we have accel_y, rotate_x, rotate_y; PC5 we have accel_z, rotate_y; PC6 we have accel_x, accel_y and some rotate_z.  -->
+
+```{r,eval=FALSE,, echo = FALSE}
+movelet.dat <- cbind(pcs, dat[dat$Wrist_Location == "right",c("ActivityName","Wrist_Location")])
+movelet.dat$ActivityName <- gsub(" ", "_", movelet.dat$ActivityName)
+
+## create accel data 
+patient.52 <- Acceleration_Create2(movelet.dat,subjectName="patient52",
+                                   n_axes = 6,frequency=100) # 6 variables * 100 hz = 600?? 
+# ## Train Open_Water_Bottle_and_Take_a_Drink chapter
+# from <- min(which(patient.52$Label == "Open_Water_Bottle_and_Take_a_Drink"))
+# to <- max(which(patient.52$Label == "Open_Water_Bottle_and_Take_a_Drink"))
+# Ch.Open_Water_Bottle_and_Take_a_Drink.patient52 <- Movelet_Create2(FROM = from ,TO = to, 
+#                                                                   DATA = patient.52, n_axes = 6,
+#                                                       ChapName = "Open_Water_Bottle_and_Take_a_Drink")
+# ## Train walk chapter
+# from <- min(which(patient.52$Label == "Walk"))
+# to <- max(which(patient.52$Label == "Walk"))
+# Ch.Walk.patient52 <- Movelet_Create2(FROM = from ,TO = to, 
+#                                     DATA = patient.52, n_axes = 6,
+#                                     ChapName = "Walk")
+# ## Train Pour_Water_into_a_Cup chapter
+# from <- min(which(patient.52$Label == "Pour_Water_into_a_Cup"))
+# to <- max(which(patient.52$Label == "Pour_Water_into_a_Cup"))
+# Ch.Pour_Water_into_a_Cup.patient52 <- Movelet_Create2(FROM = from ,TO = to, 
+#                                     DATA = patient.52, n_axes = 6,
+#                                     ChapName = "Pour_Water_into_a_Cup")
+# ## train Look_around_in_bag_or_purse chapter
+# from <- min(which(patient.52$Label == "Look_around_in_bag_or_purse"))
+# to <- max(which(patient.52$Label == "Look_around_in_bag_or_purse"))
+# Ch.Look_around_in_bag_or_purse.patient52 <- Movelet_Create2(FROM = from ,TO = to, 
+#                                     DATA = patient.52, n_axes = 6, 
+#                                     ChapName = "Look_around_in_bag_or_purse")
+## train eat from bag chapter
+# from <- min(which(patient.52$Label == "Eat_From_Bag"))
+# to <- max(which(patient.52$Label == "Eat_From_Bag"))
+# Ch.Eat_From_Bag.patient52 <- Movelet_Create2(FROM = from ,TO = to, 
+#                                     DATA = patient.52, n_axes = 6,
+#                                     ChapName = "Eat_From_Bag")
+
+# ## train open water bottle chapter
+# from <- min(which(patient.52$Label == "9._Med_Taking")) + 100 ## 12:11:39 picks up water bottle to uncap
+# to <- max(which(patient.52$Label == "9._Med_Taking")) + 300 ## 12:11:41 returns opened water bottle to table
+# Ch.Pick_up_bottle.patient52 <- Movelet_Create2(FROM = from ,TO = to, 
+#                                     DATA = patient.52, n_axes = 6,
+#                                     ChapName = "Pick_up_bottle")
+
+## train pick up and open a pill bottle chapter
+from <- min(which(patient.52$Label == "9._Med_Taking")) + 200 ## 12:11:42 picks up pill bottle
+to <- min(which(patient.52$Label == "9._Med_Taking")) + 400 ## 112:11:46
+Ch.Pick_up_and_open_pill_bottle.patient52 <- Movelet_Create2(FROM = from ,TO = to, 
+                                    DATA = patient.52, n_axes = 6,
+                                    ChapName = "Pick_up_and_open_pill_bottle")
+# ## train pour pill chapter
+# from <- min(which(patient.52$Label == "9._Med_Taking")) + 400 ## 12:11:46
+# to <- min(which(patient.52$Label == "9._Med_Taking")) + 450 ## 12:11:47
+# Ch.Pour_pill.patient52 <- Movelet_Create2(FROM = from ,TO = to,
+#                                     DATA = patient.52, n_axes = 6,
+#                                     ChapName = "Pour_pill")
+
+## train pour and take pill chapter 
+from <- min(which(patient.52$Label == "9._Med_Taking")) + 400 ## 12:11:46 
+to <- min(which(patient.52$Label == "9._Med_Taking")) + 500 ## 112:11:48
+Ch.Pour_and_take_pill.patient52 <- Movelet_Create2(FROM = from ,TO = to, 
+                                    DATA = patient.52, n_axes = 6,
+                                    ChapName = "Pour_and_take_pill")
+
+## train Wash_Hands chapter
+from <- min(which(patient.52$Label == "Wash_Hands"))
+to <- max(which(patient.52$Label == "Wash_Hands"))
+Ch.Wash_Hands.patient52 <- Movelet_Create2(FROM = from ,TO = to,
+                                    DATA = patient.52, n_axes = 6,
+                                    ChapName = "Wash_Hands")
+
+## test data
+test.dat <- subset(movelet.dat, ActivityName %in% c("Turn_Key","Open_Door","6._Med_Taking","7._Med_Taking"))
+test.dat.patient.52 <- Acceleration_Create2(test.dat,subjectName="patient52",n_axes = 6,frequency=100) #6 variables * 100 hz
+train.label=c("Pick_up_and_open_pill_bottle","Pour_and_take_pill","Wash_Hands")
+```
+
+```{r, eval=FALSE, echo = FALSE}
+#expand the prediction activity labels to include all trained chapters
+pred <- Movelet_Pred2(test.dat.patient.52, Act.Names=train.label, vote=TRUE)
+# Save it
+saveRDS(pred, file = "patient52_6pcs_right_pred.rds")
+```
+
+```{r,eval=FALSE, echo = FALSE}
+# load it
+patient52_6pcs_right_pred <- readRDS(file = "patient52_6pcs_right_pred.rds")
+
+##plot the trained vs. observed labels
+# dygraph(data=c(dat[time.test,c('time',names(dat)[c(11:13,30)])],pred$Pred),main=paste('Patient', dat$PatientID[1],' Rotation Right Wrist',sep=''))%>% 
+#   dyAxis("x", drawGrid = FALSE) %>%
+#   dyOptions(colors = RColorBrewer::brewer.pal(7, "Set1"))  %>%
+#   dyRangeSelector()
+#table(patient52_6pcs_right_pred$Pred)
+
+
+time <- seq(1,length(patient52_6pcs_right_pred$Pred))
+plot(x = patient52_6pcs_right_pred$Pred , y = time, xlab = "Prediction", ylab = "Time", xaxt = "n", pch = 20)
+axis(1, at=seq(1,length(train.label)), labels= FALSE)
+text(seq(1,length(train.label)),par("usr")[3] - 100, labels = train.label, srt = 45, xpd = TRUE, cex = 0.5, adj = c(1,0))
+text(x = 2.5, y = 90, "Open_Door", cex = 0.5)
+abline(h = max(which(test.dat$ActivityName == "Open_Door")), col="red")
+text(x = 2.5, y = 300, "Turn_Key", cex = 0.5)
+abline(h = max(which(test.dat$ActivityName == "Turn_Key")), col="red")
+text(x = 2.5, y = 600, "Pick_up_and_open_a_pill_bottle", cex = 0.5)
+abline(h = min(which(test.dat$ActivityName == "6._Med_Taking") + 250), col="red")
+text(x = 2.5, y = 800, "Pour_pill", cex = 0.5)
+abline(h = min(which(test.dat$ActivityName == "6._Med_Taking") + 400), col="red")
+text(x = 2.5, y = 1000, "Take_pill_and_the_rest", cex = 0.5)
+abline(h = min(which(test.dat$ActivityName == "7._Med_Taking")), col="red")
+text(x = 2.5, y = 1500, "Pick_up_and_open_a_water_bottle_and_pill_bottle", cex = 0.5)
+abline(h = min(which(test.dat$ActivityName == "7._Med_Taking") + 450), col="red")
+text(x = 2.5, y = 1900, "Pour_pill", cex = 0.5)
+abline(h = min(which(test.dat$ActivityName == "7._Med_Taking") + 600), col="red")
+text(x = 2.5, y = 2200, "Take_pill", cex = 0.5)
+```
+
+
+
+
+
+<!-- ### Using 6 PCs for all 15 variables of the left hand -->
+```{r}
+# table(dat$Wrist_Location)
+# x = dat$Wrist_Location == "left      "
+# test <- ave(x, cumsum(!x), FUN = cumsum)
+# table(test)
+# which(test > 1)
+# x.rm.left <- dat$Wrist_Location[-which(test > 1)]
+# table(x.rm.left)
+
+
+```
+
+```{r,eval=FALSE, echo = FALSE}
+#names(dat)
+#### perform PCA on 15 variables of the right hand
+
+varss <- dat[dat$Wrist_Location =="left",c("accel_x_coord","accel_y_coord","accel_z_coord",
+                "rotate_x_coord","rotate_y_coord", "rotate_z_coord",
+                "gravity_x_coord","gravity_z_coord","gravity_y_coord",
+                "magneto_x_coord","magneto_y_coord","magneto_z_coord",
+                "attitude_x_coord","attitude_y_coord","attitude_z_coord")]
+varss.pca <- prcomp(varss, center=TRUE, scale.=TRUE)
+summary(varss.pca)
+pcs <- varss.pca$x[,1:6] ## the 6 PCs for movelet
+
+## check pc plots
+#fviz_pca_var(varss.pca,axes = c(1, 2))
+#fviz_pca_var(varss.pca,axes = c(3, 4))
+#fviz_pca_var(varss.pca,axes = c(5, 6))
+varss.pca$rotation[,1:6]
+```
+
+<!-- PC1 is mainly contributed by the gravity_x, magneto_x and attitude_x. Similarly, for PC2 we have gravity_y, magneto_y and attitude_y (some combination of the y-axes); PC3 we have gravity_z and magneto_z (some combination of the z-axes); PC4 we have rotate_x, rotate_y and rotate_z; PC5 we have accel_x, accel_z, rotate_z; PC6 we have accel_y, accel_z. -->
+
+```{r,eval=FALSE, echo = FALSE}
+movelet.dat <- cbind(pcs, dat[dat$Wrist_Location == "left",c("ActivityName","Wrist_Location")])
+movelet.dat$ActivityName <- gsub(" ", "_", movelet.dat$ActivityName)
+
+## create accel data 
+patient.52 <- Acceleration_Create2(movelet.dat,subjectName="patient52",
+                                   n_axes = 6,frequency=100) # 6 variables * 100 hz = 600?? 
+## train pick up and open a pill bottle chapter
+from <- min(which(patient.52$Label == "9._Med_Taking")) + 200 ## 12:11:42 picks up pill bottle
+to <- min(which(patient.52$Label == "9._Med_Taking")) + 400 ## 112:11:46
+Ch.Pick_up_and_open_pill_bottle.patient52 <- Movelet_Create2(FROM = from ,TO = to, 
+                                    DATA = patient.52, n_axes = 6,
+                                    ChapName = "Pick_up_and_open_pill_bottle")
+# ## train pour pill chapter
+# from <- min(which(patient.52$Label == "9._Med_Taking")) + 400 ## 12:11:46
+# to <- min(which(patient.52$Label == "9._Med_Taking")) + 450 ## 12:11:47
+# Ch.Pour_pill.patient52 <- Movelet_Create2(FROM = from ,TO = to,
+#                                     DATA = patient.52, n_axes = 6,
+#                                     ChapName = "Pour_pill")
+
+## train pour and take pill chapter 
+from <- min(which(patient.52$Label == "9._Med_Taking")) + 400 ## 12:11:46 
+to <- min(which(patient.52$Label == "9._Med_Taking")) + 500 ## 112:11:48
+Ch.Pour_and_take_pill.patient52 <- Movelet_Create2(FROM = from ,TO = to, 
+                                    DATA = patient.52, n_axes = 6,
+                                    ChapName = "Pour_and_take_pill")
+
+## train Wash_Hands chapter
+from <- min(which(patient.52$Label == "Wash_Hands"))
+to <- max(which(patient.52$Label == "Wash_Hands"))
+Ch.Wash_Hands.patient52 <- Movelet_Create2(FROM = from ,TO = to,
+                                    DATA = patient.52, n_axes = 6,
+                                    ChapName = "Wash_Hands")
+## test data
+test.dat <- subset(movelet.dat, ActivityName %in% c("Turn_Key","Open_Door","6._Med_Taking","7._Med_Taking"))
+test.dat.patient.52 <- Acceleration_Create2(test.dat,subjectName="patient52",n_axes = 6,frequency=100) #6 variables * 100 hz
+train.label=c("Pick_up_and_open_pill_bottle","Pour_and_take_pill","Wash_Hands")
+```
+
+```{r, eval = FALSE, echo = FALSE}
+#expand the prediction activity labels to include all trained chapters
+pred <- Movelet_Pred2(test.dat.patient.52, Act.Names=train.label, vote=TRUE)
+# Save it
+saveRDS(pred, file = "patient52_6pcs_left_pred.rds")
+```
+
+```{r,eval=FALSE, echo = FALSE}
+# load it
+patient52_6pcs_left_pred <- readRDS(file = "patient52_6pcs_left_pred.rds")
+table(patient52_6pcs_left_pred$Pred)
+## plot results
+time <- seq(1,length(patient52_6pcs_left_pred$Pred))
+plot(x = patient52_6pcs_left_pred$Pred , y = time, xlab = "Prediction", ylab = "Time", xaxt = "n", pch = 20)
+axis(1, at=seq(1,length(train.label)), labels= FALSE)
+text(seq(1,length(train.label)),par("usr")[3] - 100, labels = train.label, srt = 45, xpd = TRUE, cex = 0.5, adj = c(1,0))
+text(x = 1.5, y = 90, "Open_Door", cex = 0.5)
+abline(h = max(which(test.dat$ActivityName == "Open_Door")), col="red")
+text(x = 1.5, y = 300, "Turn_Key", cex = 0.5)
+abline(h = max(which(test.dat$ActivityName == "Turn_Key")), col="red")
+text(x = 1.5, y = 600, "Pick_up_and_open_a_pill_bottle", cex = 0.5)
+abline(h = min(which(test.dat$ActivityName == "6._Med_Taking") + 250), col="red")
+text(x = 1.5, y = 800, "Pour_pill", cex = 0.5)
+abline(h = min(which(test.dat$ActivityName == "6._Med_Taking") + 400), col="red")
+text(x = 1.5, y = 1000, "Take_pill_and_the_rest", cex = 0.5)
+abline(h = min(which(test.dat$ActivityName == "7._Med_Taking")), col="red")
+text(x = 1.5, y = 1500, "Pick_up_and_open_a_water_bottle_and_pill_bottle", cex = 0.5)
+abline(h = min(which(test.dat$ActivityName == "7._Med_Taking") + 450), col="red")
+text(x = 1.5, y = 1900, "Pour_pill", cex = 0.5)
+abline(h = min(which(test.dat$ActivityName == "7._Med_Taking") + 600), col="red")
+text(x = 1.5, y = 2200, "Take_pill", cex = 0.5)
+```
+
+### Using 6 PCs for all 15 variables of both hands
+
+```{r, eval = FALSE, echo = FALSE}
+#names(dat)
+#### perform PCA on 15 variables of both hands
+varss <- dat[ ,c("accel_x_coord","accel_y_coord","accel_z_coord",
+                "rotate_x_coord","rotate_y_coord", "rotate_z_coord",
+                "gravity_x_coord","gravity_z_coord","gravity_y_coord",
+                "magneto_x_coord","magneto_y_coord","magneto_z_coord",
+                "attitude_x_coord","attitude_y_coord","attitude_z_coord")]
+varss.pca <- prcomp(varss, center=TRUE, scale.=TRUE)
+summary(varss.pca)
+pcs <- varss.pca$x[,1:6] ## the 6 PCs for movelet
+
+## check pc plots
+#fviz_pca_var(varss.pca,axes = c(1, 2))
+#fviz_pca_var(varss.pca,axes = c(3, 4))
+#fviz_pca_var(varss.pca,axes = c(5, 6))
+varss.pca$rotation[,1:6]
+```
+
+<!-- PC1 is mainly contributed by the 3 magnetos. For PC2 we have gravity_y, attitude_y (some combination of the y-axes); PC3 we have gravity_x and attitude_x and attitude_z (some combination of the x-axes); PC4 we have accel_y and gravity_z; PC5 we have rotation_x, rotation_y, rotation_z; PC6 we have accel_x, accel_z. -->
+
+```{r, echo = FALSE}
+## Relabel names for wrist location
+dat$Wrist_Location <- ifelse(dat$Wrist_Location =="right     ","right","left")
+
+## remove duplicate left and right wrist to create balance data
+dat$Wrist_Location2 <- ifelse(dat$Wrist_Location == "left", 0, 1)
+keep_idx <- c()
+diff_time <- diff(dat$time)
+diff_wrist <- diff(dat$Wrist_Location2)
+
+for (i in 1:length(diff_time)){
+  if (diff_time[i] <= 0.01 & diff_wrist[i] != 0)
+  {
+    keep_idx = c(keep_idx, i, i + 1) 
+  }
+  i = i + 2
+}
+nodup_dat <- dat[keep_idx, ]
+table(nodup_dat$Wrist_Location)
+```
+
+```{r}
+## extract 3 pcs for the left hand
+vars_left <- nodup_dat[nodup_dat$Wrist_Location=="left",
+                       c("accel_x_coord","accel_y_coord","accel_z_coord",
+                        "rotate_x_coord","rotate_y_coord", "rotate_z_coord",
+                        "gravity_x_coord","gravity_z_coord","gravity_y_coord",
+                        "magneto_x_coord","magneto_y_coord","magneto_z_coord",
+                        "attitude_x_coord","attitude_y_coord","attitude_z_coord")]
+varsleft.pca <- prcomp(vars_left, center=TRUE, scale.=TRUE)
+#summary(varsleft.pca)
+pcs_left <- varsleft.pca$x[,1:3]
+
+## extract 3 pcs for the right hand
+vars_right <- nodup_dat[nodup_dat$Wrist_Location=="right",
+                       c("accel_x_coord","accel_y_coord","accel_z_coord",
+                        "rotate_x_coord","rotate_y_coord", "rotate_z_coord",
+                        "gravity_x_coord","gravity_z_coord","gravity_y_coord",
+                        "magneto_x_coord","magneto_y_coord","magneto_z_coord",
+                        "attitude_x_coord","attitude_y_coord","attitude_z_coord")]
+varsright.pca <- prcomp(vars_right, center=TRUE, scale.=TRUE)
+#summary(varsright.pca)
+pcs_right <- varsright.pca$x[,1:3]
+
+pcs_combined <- cbind(pcs_left,pcs_right)
+colnames(pcs_combined) <- c("PC1_left","PC2_left","PC3_left","PC1_right","PC2_right","PC3_right")
+```
+
+```{r}
+# dat$Time <- c(1:nrow(dat))
+# table(dat$Wrist_Location)
+
+## combine data with Pcs
+ActivityName <- nodup_dat$ActivityName[nodup_dat$Wrist_Location=="left"]
+movelet.dat <- data.frame(pcs_combined, ActivityName)
+movelet.dat$ActivityName <- gsub(" ", "_", movelet.dat$ActivityName)
+
+## Reorder movelet into left hand then right hand for each activity
+#movelet.dat <- movelet.dat[order(movelet.dat$ActivityName,movelet.dat$Wrist_Location),]
+
+## create accel data 
+patient.52 <- Acceleration_Create2(movelet.dat,subjectName="patient52",
+                                   n_axes = 6,frequency=50) # 50 obs per second
+## train pick up and open a pill bottle chapter
+## 9._Med_Taking is about 24 seconds, about 1200 observations, so 1 sec = 50 obs. 
+from <- min(which(patient.52$Label == "9._Med_Taking")) + 200 ## 12:11:42 picks up pill bottle
+to <- min(which(patient.52$Label == "9._Med_Taking")) + 400 ## 112:11:46
+Ch.Pick_up_and_open_pill_bottle.patient52 <- Movelet_Create2(FROM = from ,TO = to, 
+                                    DATA = patient.52, n_axes = 6,
+                                    ChapName = "Pick_up_and_open_pill_bottle")
+# ## train pour pill chapter
+# from <- min(which(patient.52$Label == "9._Med_Taking")) + 800 ## 12:11:46
+# to <- min(which(patient.52$Label == "9._Med_Taking")) + 900 ## 12:11:47
+# Ch.Pour_pill.patient52 <- Movelet_Create2(FROM = from ,TO = to,
+#                                     DATA = patient.52, n_axes = 6,
+#                                     ChapName = "Pour_pill")
+
+## train take pill chapter 
+from <- min(which(patient.52$Label == "9._Med_Taking")) + 400 ## 12:11:46 
+to <- min(which(patient.52$Label == "9._Med_Taking")) + 500 ## 112:11:48
+Ch.Pour_pill_return_bottle_and_take_pill.patient52 <- Movelet_Create2(FROM = from ,TO = to, 
+                                    DATA = patient.52, n_axes = 6,
+                                    ChapName = "Pour_pill_return_bottle_and_take_pill")
+
+## train Wash_Hands chapter
+from <- min(which(patient.52$Label == "Wash_Hands"))
+to <- max(which(patient.52$Label == "Wash_Hands"))
+Ch.Wash_Hands.patient52 <- Movelet_Create2(FROM = from ,TO = to,
+                                    DATA = patient.52, n_axes = 6,
+                                    ChapName = "Wash_Hands")
+## train Look_around_in_bag_or_purse chapter
+from <- min(which(patient.52$Label == "Look_around_in_bag_or_purse"))
+to <- max(which(patient.52$Label == "Look_around_in_bag_or_purse"))
+Ch.Look_around_in_bag_or_purse.patient52 <- Movelet_Create2(FROM = from ,TO = to,
+                                    DATA = patient.52, n_axes = 6,
+                                    ChapName = "Look_around_in_bag_or_purse")
+## test data
+test.dat <- subset(movelet.dat, ActivityName %in% c("Walk","Turn_Key","Open_Door","Eat_From_Bag","6._Med_Taking","7._Med_Taking","4._Med_Taking","5._Med_Taking","8._Med_Taking","10._Med_Taking","11._Med_Taking","12._Med_Taking"))
+test.dat.patient.52 <- Acceleration_Create2(test.dat,subjectName="patient52",n_axes = 6,frequency=50) 
+train.label=c("Pick_up_and_open_pill_bottle","Pour_pill_return_bottle_and_take_pill","Wash_Hands","Look_around_in_bag_or_purse")
+```
+
+```{r, eval = FALSE}
+#expand the prediction activity labels to include all trained chapters
+pred <- Movelet_Pred2(test.dat.patient.52, Act.Names=train.label, vote=TRUE)
+# Save it
+#saveRDS(pred, file = "patient52_6pcs_both_separated_wrists_pred.rds")
+saveRDS(pred, file = "patient52_8_meds.rds")
+```
+
+```{r}
+# load it
+patient52_8_meds <- readRDS(file = "patient52_8_meds.rds")
+patient52_8_meds$Pred2 <- recode(patient52_8_meds$Pred, `1`="Pick_up_and_open_pill_bottle", `2`="Pour_pill_return_bottle_and_take_pill", `3`="Wash_Hands", `4`="Look_around_in_bag_or_purse")
+```
+
+```{r, eval = FALSE, echo = FALSE}
+## plot results
+time <- seq(1,length(patient52_8_meds$Pred))
+plot(x = patient52_8_meds$Pred , y = time, xlab = "Prediction", ylab = "Time", xaxt = "n", pch = 20, cex = 0.1)
+axis(1, at=seq(1,length(train.label)), labels= FALSE)
+text(seq(1,length(train.label)),par("usr")[3] - 100, labels = train.label, srt = 30, xpd = TRUE, cex = 0.5, adj = c(1,0))
+text(x = 1.5, y = 90, "Open_Door", cex = 0.5)
+abline(h = max(which(test.dat$ActivityName == "Open_Door")), col="red")
+text(x = 1.5, y = 250, "Turn_Key", cex = 0.5)
+abline(h = max(which(test.dat$ActivityName == "Turn_Key")), col="red")
+#abline(h = min(which(test.dat$ActivityName == "6._Med_Taking") + 200), col="red")
+text(x = 1.5, y = min(which(test.dat$ActivityName == "6._Med_Taking") + 125), "Pick_up_and_open_a_pill_bottle", cex = 0.5)
+abline(h = min(which(test.dat$ActivityName == "6._Med_Taking") + 250), col="red")
+#text(x = 1.5, y = min(which(test.dat$ActivityName == "6._Med_Taking") + 650), "Pour_pill", cex = 0.5)
+#abline(h = min(which(test.dat$ActivityName == "6._Med_Taking") + 800), col="red")
+text(x = 1.5, y = min(which(test.dat$ActivityName == "6._Med_Taking") + 375), "Pour_pill_return_bottle_and_take_pill", cex = 0.5)
+abline(h = min(which(test.dat$ActivityName == "6._Med_Taking") + 500), col="red")
+text(x = 1.5, y = min(which(test.dat$ActivityName == "6._Med_Taking") + 600), "Others", cex = 0.5)
+
+abline(h = min(which(test.dat$ActivityName == "7._Med_Taking")), col="red")
+text(x = 1.5, y = min(which(test.dat$ActivityName == "7._Med_Taking") + 225), "Pick_up_and_open_a_water_bottle_and_pill_bottle", cex = 0.5)
+abline(h = min(which(test.dat$ActivityName == "7._Med_Taking") + 450), col="red")
+text(x = 1.5, y = min(which(test.dat$ActivityName == "7._Med_Taking") + 550), "Pour_pill_return_bottle_and_take_pill", cex = 0.5)
+abline(h = min(which(test.dat$ActivityName == "7._Med_Taking") + 650), col="red")
+# text(x = 1.5, y = min(which(test.dat$ActivityName == "7._Med_Taking") + 1250), "Take_pill", cex = 0.5)
+# abline(h = min(which(test.dat$ActivityName == "7._Med_Taking") + 1300), col="red")
+text(x = 1.5, y = min(which(test.dat$ActivityName == "7._Med_Taking") + 800), "Others", cex = 0.5)
+```
+
+```{r, eval = FALSE, echo = FALSE}
+# load it
+patient52_6pcs_both_separated_wrists_pred <- readRDS(file = "patient52_6pcs_both_separated_wrists_pred.rds")
+#table(patient52_6pcs_both_separated_wrists_pred$Pred)
+patient52_6pcs_both_separated_wrists_pred$Pred2 <- ifelse(patient52_6pcs_both_separated_wrists_pred$Pred == 1, "Pick_up_and_open_pill_bottle", ifelse(patient52_6pcs_both_separated_wrists_pred$Pred == 2, "Pour_pill_return_bottle_and_take_pill","Wash_Hands"))
+table(patient52_6pcs_both_separated_wrists_pred$Pred2)
+
+## plot results
+time <- seq(1,length(patient52_6pcs_both_separated_wrists_pred$Pred))
+plot(x = patient52_6pcs_both_separated_wrists_pred$Pred , y = time, xlab = "Prediction", ylab = "Time", xaxt = "n", pch = 20, cex = 0.1)
+axis(1, at=seq(1,length(train.label)), labels= FALSE)
+text(seq(1,length(train.label)),par("usr")[3] - 100, labels = train.label, srt = 30, xpd = TRUE, cex = 0.5, adj = c(1,0))
+text(x = 1.5, y = 90, "Open_Door", cex = 0.5)
+abline(h = max(which(test.dat$ActivityName == "Open_Door")), col="red")
+text(x = 1.5, y = 250, "Turn_Key", cex = 0.5)
+abline(h = max(which(test.dat$ActivityName == "Turn_Key")), col="red")
+#abline(h = min(which(test.dat$ActivityName == "6._Med_Taking") + 200), col="red")
+text(x = 1.5, y = min(which(test.dat$ActivityName == "6._Med_Taking") + 125), "Pick_up_and_open_a_pill_bottle", cex = 0.5)
+abline(h = min(which(test.dat$ActivityName == "6._Med_Taking") + 250), col="red")
+#text(x = 1.5, y = min(which(test.dat$ActivityName == "6._Med_Taking") + 650), "Pour_pill", cex = 0.5)
+#abline(h = min(which(test.dat$ActivityName == "6._Med_Taking") + 800), col="red")
+text(x = 1.5, y = min(which(test.dat$ActivityName == "6._Med_Taking") + 375), "Pour_pill_return_bottle_and_take_pill", cex = 0.5)
+abline(h = min(which(test.dat$ActivityName == "6._Med_Taking") + 500), col="red")
+text(x = 1.5, y = min(which(test.dat$ActivityName == "6._Med_Taking") + 600), "Others", cex = 0.5)
+
+abline(h = min(which(test.dat$ActivityName == "7._Med_Taking")), col="red")
+text(x = 1.5, y = min(which(test.dat$ActivityName == "7._Med_Taking") + 225), "Pick_up_and_open_a_water_bottle_and_pill_bottle", cex = 0.5)
+abline(h = min(which(test.dat$ActivityName == "7._Med_Taking") + 450), col="red")
+text(x = 1.5, y = min(which(test.dat$ActivityName == "7._Med_Taking") + 550), "Pour_pill_return_bottle_and_take_pill", cex = 0.5)
+abline(h = min(which(test.dat$ActivityName == "7._Med_Taking") + 650), col="red")
+# text(x = 1.5, y = min(which(test.dat$ActivityName == "7._Med_Taking") + 1250), "Take_pill", cex = 0.5)
+# abline(h = min(which(test.dat$ActivityName == "7._Med_Taking") + 1300), col="red")
+text(x = 1.5, y = min(which(test.dat$ActivityName == "7._Med_Taking") + 800), "Others", cex = 0.5)
+```
+
+
+```{r}
+## add label for trained activities
+test.dat.patient.52$Label2 <- test.dat.patient.52$Label
+test.dat.patient.52$Label2[c(
+ min(which(test.dat$ActivityName == "4._Med_Taking")):
+ min(which(test.dat$ActivityName == "4._Med_Taking")+ 700),
+ min(which(test.dat$ActivityName == "5._Med_Taking")):
+ min(which(test.dat$ActivityName == "5._Med_Taking")+ 250),
+ min(which(test.dat$ActivityName == "6._Med_Taking")):
+ min(which(test.dat$ActivityName == "6._Med_Taking")+ 250),
+ min(which(test.dat$ActivityName == "7._Med_Taking")):
+ min(which(test.dat$ActivityName == "7._Med_Taking")+ 450),
+ min(which(test.dat$ActivityName == "8._Med_Taking")):
+ min(which(test.dat$ActivityName == "8._Med_Taking")+ 400),
+ min(which(test.dat$ActivityName == "10._Med_Taking")):
+ min(which(test.dat$ActivityName == "10._Med_Taking")+ 500),
+ min(which(test.dat$ActivityName == "11._Med_Taking")):
+ min(which(test.dat$ActivityName == "11._Med_Taking")+ 300),
+ min(which(test.dat$ActivityName == "12._Med_Taking")):
+ min(which(test.dat$ActivityName == "12._Med_Taking")+ 300)
+ )] <- "Pick_up_and_open_pill_bottle"
+
+test.dat.patient.52$Label2[c(
+ min(which(test.dat$ActivityName == "4._Med_Taking") + 701):
+ min(which(test.dat$ActivityName == "4._Med_Taking") + 1150),
+ min(which(test.dat$ActivityName == "5._Med_Taking") + 251):
+ min(which(test.dat$ActivityName == "5._Med_Taking") + 500),
+ min(which(test.dat$ActivityName == "6._Med_Taking") + 251):
+ min(which(test.dat$ActivityName == "6._Med_Taking") + 500),
+ min(which(test.dat$ActivityName == "7._Med_Taking") + 451):
+ min(which(test.dat$ActivityName == "7._Med_Taking") + 650),
+ min(which(test.dat$ActivityName == "8._Med_Taking") + 401):
+ min(which(test.dat$ActivityName == "8._Med_Taking") + 650),
+ min(which(test.dat$ActivityName == "10._Med_Taking") + 501):
+ min(which(test.dat$ActivityName == "10._Med_Taking") + 800),
+ min(which(test.dat$ActivityName == "11._Med_Taking") + 301):
+ min(which(test.dat$ActivityName == "11._Med_Taking") + 650),
+ min(which(test.dat$ActivityName == "12._Med_Taking") + 301):
+ min(which(test.dat$ActivityName == "12._Med_Taking") + 400)
+ )] <- "Pour_pill_return_bottle_and_take_pill"
+
+temp <- data.frame(cbind(test.dat.patient.52$Label2, patient52_8_meds$Pred2, 
+                         patient52_8_meds$Pred))
+colnames(temp) <- c("Label","Pred","Pred_num")
+temp <- temp[test.dat.patient.52$Label2 %in% c("Pick_up_and_open_pill_bottle","Pour_pill_return_bottle_and_take_pill"), ]
+
+## determine number of med taking activities and their location in the data
+train <- rle(as.character(temp$Label))
+test <- rle(as.numeric(temp$Pred_num))
+rle_diff <- diff(test$values)
+Pick_up_and_open_pill_bottle_idx <- which(train$values == "Pick_up_and_open_pill_bottle")
+
+## how many % of correct prediction needed to classify a correct prediction?
+cut_off <- seq(0.50,0.7,0.05)
+pred_res_acc_median <- c()
+correct_med_pred <- c()
+#true_label <-  c("Med-taking session","Not med-taking","Part of Med-taking, not a full session","Med-taking session","Med-taking session","Med-taking session","Part of Med-taking, not a full session","Med-taking session", "Med-taking session","Med-taking session","Part of Med-taking, not a full session","Part of Med-taking, not a full session","Med-taking session","Part of Med-taking, not a full session")
+for (j in 1:length(cut_off)){
+  ## determine the cut off for prediction length
+  correct_pred_cut_off <- c()
+  for(i in 1:length(Pick_up_and_open_pill_bottle_idx)){
+    correct_pred_cut_off[i] <- cut_off[j] * sum(train$lengths[Pick_up_and_open_pill_bottle_idx][i] + train$lengths[Pick_up_and_open_pill_bottle_idx + 1][i])
+  }
+  correct_pred_cut_off_median <- median(correct_pred_cut_off)
+  
+  ## determine accuracy of the prediction
+  pred_res <- c()
+  for (i in which(rle_diff == 1)){
+    if(test$values[i] == 1 & test$values[i+1] == 2){
+      if(test$lengths[i] + test$lengths[i+1] > correct_pred_cut_off_median){
+          pred_res <- c(pred_res,"Med-taking session")
+        } else {pred_res <- c(pred_res,"Part of Med-taking, not a full session")}
+    } else {pred_res <- c(pred_res,"Not med-taking")}
+  }
+  #pred_res_acc_median[j] <- round(sum(pred_res == true_label)/length(pred_res),2)
+  #correct_med_pred[j] <- sum(which(pred_res == "Med-taking session") == which(true_label == "Med-taking session"))
+  correct_med_pred[j] <- length(which(pred_res == "Med-taking session"))
+}
+
+data.frame(cut_off,correct_med_pred, med_session = 8)
+
+## Calculating accuracy
+Pick_up_and_open_pill_bottle_acc <- sum(as.character(temp$Label) %in% "Pick_up_and_open_pill_bottle" & as.character(temp$Pred) %in% "Pick_up_and_open_pill_bottle")/sum(as.character(temp$Label) %in% "Pick_up_and_open_pill_bottle")
+Pour_pill_return_bottle_and_take_pill_acc <- sum(as.character(temp$Label) %in% "Pour_pill_return_bottle_and_take_pill" & as.character(temp$Pred) %in% "Pour_pill_return_bottle_and_take_pill")/sum(as.character(temp$Label) %in% "Pour_pill_return_bottle_and_take_pill")
+
+## create 2x2 tables
+obs_pick_pred_pick <- sum(as.character(temp$Label) %in% "Pick_up_and_open_pill_bottle" & as.character(temp$Pred) %in% "Pick_up_and_open_pill_bottle")
+obs_pick_pred_others <- sum(as.character(temp$Label) %in% "Pick_up_and_open_pill_bottle" & !(as.character(temp$Pred) %in% "Pick_up_and_open_pill_bottle"))
+obs_pour_pred_others <- sum(as.character(temp$Label) %in% "Pour_pill_return_bottle_and_take_pill" & !(as.character(temp$Pred) %in% "Pour_pill_return_bottle_and_take_pill"))
+obs_pour_pred_pour <- sum(as.character(temp$Label) %in% "Pour_pill_return_bottle_and_take_pill" & as.character(temp$Pred) %in% "Pour_pill_return_bottle_and_take_pill")
+
+## row = obs, col = pred
+acc_mat <- matrix(c(obs_pick_pred_pick,obs_pick_pred_others,obs_pour_pred_others,obs_pour_pred_pour), byrow = TRUE, nrow = 2)
+#acc_mat
+```
+
+The accuracy for predicting "pick up and open pill bottle" is `r round(Pick_up_and_open_pill_bottle_acc,4)` and the accuracy for predicting "pour pill, return bottle and take pill" is `r round(Pour_pill_return_bottle_and_take_pill_acc,4)`.
+
+Another way that we determine accuracy is to determine whether the prediction is med-taking related or not. Based on this definition, we construct a confusion matrix below: 
+
+```{r, calc_acc}
+#length(test.dat.patient.52$Label)
+#length(patient52_8_meds$Pred2)
+temp2 <- data.frame(cbind(test.dat.patient.52$Label[1:length(patient52_8_meds$Pred2)], patient52_8_meds$Pred2))
+temp2$True_label <- factor(ifelse(temp2$X1 %in% c("Open_Door","Turn_Key","Eat_From_Bag"), "Not Med Taking","Med Taking"))
+temp2$Pred_label <- factor(ifelse(temp2$X2 %in% c("Wash_Hands","Look_around_in_bag_or_purse"), "Not Med Taking","Med Taking"))
+conf_mat <- confusionMatrix(data = temp2$Pred_label, reference = temp2$True_label)
+conf_mat$table
+conf_mat$overall[1]
+```
+
+## Try movelet with patient 86
+
+```{r}
+#Load Data
+# dat_86_88_89<-read.csv('/Users/quycao/Box/PipPenn/Data/Patients-86-88-89.csv',header = TRUE,stringsAsFactors = FALSE)
+# dat_86 <- subset(dat_86_88_89, PatientID == 86)
+# saveRDS(dat_86, file = "patient_86.rds")
+dat <- readRDS(file = "/Users/quycao/Box/PipPenn/Data/patient_86.rds")
+dat$Activitylabel<-match(dat$ActivityName,unique(dat$ActivityName))
+#convert time series and reorder data by time
+dat$timestamp<-substr(dat$activity_timestamp,12,23)
+dat$time<-as.numeric(hms(dat$timestamp))
+dat <- dat[sort.int(dat$time, index.return = TRUE)$ix, ]
+dat$time<-dat$time-dat$time[1]
+
+## Relabel names for wrist location
+dat$Wrist_Location <- ifelse(dat$Wrist_Location =="right     ","right","left")
+
+## remove duplicate left and right wrist to create balance data
+dat$Wrist_Location2 <- ifelse(dat$Wrist_Location == "left", 0, 1)
+keep_idx <- c()
+diff_time <- diff(dat$time)
+diff_wrist <- diff(dat$Wrist_Location2)
+
+for (i in 1:length(diff_time)){
+  if (diff_time[i] <= 0.01 & diff_wrist[i] != 0)
+  {
+    keep_idx = c(keep_idx, i, i + 1) 
+  }
+  i = i + 2
+}
+nodup_dat <- dat[keep_idx, ]
+table(nodup_dat$Wrist_Location)
+
+## extract 3 pcs for the left hand
+vars_left <- nodup_dat[nodup_dat$Wrist_Location=="left",
+                       c("accel_x_coord","accel_y_coord","accel_z_coord",
+                        "rotate_x_coord","rotate_y_coord", "rotate_z_coord",
+                        "gravity_x_coord","gravity_z_coord","gravity_y_coord",
+                        "magneto_x_coord","magneto_y_coord","magneto_z_coord",
+                        "attitude_x_coord","attitude_y_coord","attitude_z_coord")]
+varsleft.pca <- prcomp(vars_left, center=TRUE, scale.=TRUE)
+#summary(varsleft.pca)
+pcs_left <- varsleft.pca$x[,1:3]
+
+## extract 3 pcs for the right hand
+vars_right <- nodup_dat[nodup_dat$Wrist_Location=="right",
+                       c("accel_x_coord","accel_y_coord","accel_z_coord",
+                        "rotate_x_coord","rotate_y_coord", "rotate_z_coord",
+                        "gravity_x_coord","gravity_z_coord","gravity_y_coord",
+                        "magneto_x_coord","magneto_y_coord","magneto_z_coord",
+                        "attitude_x_coord","attitude_y_coord","attitude_z_coord")]
+varsright.pca <- prcomp(vars_right, center=TRUE, scale.=TRUE)
+#summary(varsright.pca)
+pcs_right <- varsright.pca$x[,1:3]
+
+pcs_combined <- cbind(pcs_left,pcs_right)
+colnames(pcs_combined) <- c("PC1_left","PC2_left","PC3_left","PC1_right","PC2_right","PC3_right")
+
+## combine data with Pcs
+ActivityName <- nodup_dat$ActivityName[nodup_dat$Wrist_Location=="left"]
+movelet.dat <- data.frame(pcs_combined, ActivityName)
+movelet.dat$ActivityName <- gsub(" ", "_", movelet.dat$ActivityName)
+
+## Reorder movelet into left hand then right hand for each activity
+#movelet.dat <- movelet.dat[order(movelet.dat$ActivityName,movelet.dat$Wrist_Location),]
+
+## create accel data 
+patient.86 <- Acceleration_Create2(movelet.dat,subjectName="patient86",
+                                   n_axes = 6,frequency=50) # 50 obs per second
+## train pick up and open a pill bottle chapter
+## 9._Med_Taking is about 18 seconds, about 900 observations, so 1 sec = 50 obs. 
+from <- min(which(patient.86$Label == "9._Med_Taking")) + 100 ## 12:40:39 
+to <- min(which(patient.86$Label == "9._Med_Taking")) + 300 ## 12:40:43
+Ch.Pick_up_and_open_pill_bottle.patient86 <- Movelet_Create2(FROM = from ,TO = to, 
+                                    DATA = patient.86, n_axes = 6,
+                                    ChapName = "Pick_up_and_open_pill_bottle")
+## train pour pill, return bottle and take pill chapter 
+from <- min(which(patient.86$Label == "9._Med_Taking")) + 300 ## 12:40:43
+to <- min(which(patient.86$Label == "9._Med_Taking")) + 500 ## 12:11:47
+Ch.Pour_pill_return_bottle_and_take_pill.patient86 <- Movelet_Create2(FROM = from ,TO = to, 
+                                    DATA = patient.86, n_axes = 6,
+                                    ChapName = "Pour_pill_return_bottle_and_take_pill")
+## train Wash_Hands chapter
+from <- min(which(patient.86$Label == "Wash_Hands"))
+to <- max(which(patient.86$Label == "Wash_Hands"))
+Ch.Wash_Hands.patient86 <- Movelet_Create2(FROM = from ,TO = to,
+                                    DATA = patient.86, n_axes = 6,
+                                    ChapName = "Wash_Hands")
+## train Look_around_in_bag_or_purse chapter
+from <- min(which(patient.86$Label == "Look_around_in_bag_or_purse"))
+to <- max(which(patient.86$Label == "Look_around_in_bag_or_purse"))
+Ch.Look_around_in_bag_or_purse.patient86 <- Movelet_Create2(FROM = from ,TO = to,
+                                    DATA = patient.86, n_axes = 6,
+                                    ChapName = "Look_around_in_bag_or_purse")
+## test data
+test.dat <- subset(movelet.dat, ActivityName %in% c("Turn_Key","Open_Door","Eat_From_Bag","6._Med_Taking","7._Med_Taking","8._Med_Taking",
+  "10._Med_Taking","11._Med_Taking","12._Med_Taking"))
+test.dat.patient.86 <- Acceleration_Create2(test.dat,subjectName="patient86",n_axes = 6,frequency=50) 
+train.label=c("Pick_up_and_open_pill_bottle","Pour_pill_return_bottle_and_take_pill","Wash_Hands","Look_around_in_bag_or_purse")
+```
+
+```{r, eval = FALSE}
+#expand the prediction activity labels to include all trained chapters
+pred <- Movelet_Pred2(test.dat.patient.86, Act.Names=train.label, vote=TRUE)
+# Save it
+#saveRDS(pred, file = "patient86_6pcs_both_separated_wrists_pred.rds")
+saveRDS(pred, file = "patient86_6_meds.rds")
+```
+
+```{r}
+# load it
+patient86_6_meds <- readRDS(file = "patient86_6_meds.rds")
+patient86_6_meds$Pred2 <- recode(patient86_6_meds$Pred, `1`="Pick_up_and_open_pill_bottle", `2`="Pour_pill_return_bottle_and_take_pill", `3`="Wash_Hands", `4`="Look_around_in_bag_or_purse")
+```
+
+```{r}
+## add label for trained activities
+test.dat.patient.86$Label2 <- test.dat.patient.86$Label
+test.dat.patient.86$Label2[c(
+ min(which(test.dat$ActivityName == "6._Med_Taking")+ 100):
+ min(which(test.dat$ActivityName == "6._Med_Taking")+ 250),
+ min(which(test.dat$ActivityName == "7._Med_Taking")+ 50):
+ min(which(test.dat$ActivityName == "7._Med_Taking")+ 300),
+ min(which(test.dat$ActivityName == "8._Med_Taking")+ 150):
+ min(which(test.dat$ActivityName == "8._Med_Taking")+ 400),
+ min(which(test.dat$ActivityName == "10._Med_Taking")+ 100):
+ min(which(test.dat$ActivityName == "10._Med_Taking")+ 300),
+ min(which(test.dat$ActivityName == "11._Med_Taking")+ 50):
+ min(which(test.dat$ActivityName == "11._Med_Taking")+ 250),
+ min(which(test.dat$ActivityName == "12._Med_Taking")+ 50):
+ min(which(test.dat$ActivityName == "12._Med_Taking")+ 250)
+ )] <- "Pick_up_and_open_pill_bottle"
+
+test.dat.patient.86$Label2[c(
+ min(which(test.dat$ActivityName == "6._Med_Taking") + 251):
+ min(which(test.dat$ActivityName == "6._Med_Taking") + 500),
+ min(which(test.dat$ActivityName == "7._Med_Taking") + 301):
+ min(which(test.dat$ActivityName == "7._Med_Taking") + 450),
+ min(which(test.dat$ActivityName == "8._Med_Taking") + 401):
+ min(which(test.dat$ActivityName == "8._Med_Taking") + 500),
+ min(which(test.dat$ActivityName == "10._Med_Taking") + 301):
+ min(which(test.dat$ActivityName == "10._Med_Taking") + 750),
+ min(which(test.dat$ActivityName == "11._Med_Taking") + 251):
+ min(which(test.dat$ActivityName == "11._Med_Taking") + 600),
+ min(which(test.dat$ActivityName == "12._Med_Taking") + 251):
+ min(which(test.dat$ActivityName == "12._Med_Taking") + 400)
+ )] <- "Pour_pill_return_bottle_and_take_pill"
+
+temp <- data.frame(cbind(test.dat.patient.86$Label2, patient86_6_meds$Pred2, 
+                         patient86_6_meds$Pred))
+colnames(temp) <- c("Label","Pred","Pred_num")
+temp <- temp[test.dat.patient.86$Label2 %in% c("Pick_up_and_open_pill_bottle","Pour_pill_return_bottle_and_take_pill"), ]
+
+## determine number of med taking activities and their location in the data
+train <- rle(as.character(temp$Label))
+test <- rle(as.numeric(temp$Pred_num))
+rle_diff <- diff(test$values)
+Pick_up_and_open_pill_bottle_idx <- which(train$values == "Pick_up_and_open_pill_bottle")
+
+## how many % of correct prediction needed to classify a correct prediction?
+cut_off <- seq(0.50,0.7,0.05)
+pred_res_acc_median <- c()
+correct_med_pred <- c()
+#true_label <-  c("Other activities","Med-taking session","Other activities","Med-taking session","Not Med-taking session","Other activities","Med-taking session","Other activities","Med-taking session","Other activities")
+for (j in 1:length(cut_off)){
+  ## determine the cut off for prediction length
+  correct_pred_cut_off <- c()
+  for(i in 1:length(Pick_up_and_open_pill_bottle_idx)){
+    correct_pred_cut_off[i] <- cut_off[j] * sum(train$lengths[Pick_up_and_open_pill_bottle_idx][i] + train$lengths[Pick_up_and_open_pill_bottle_idx + 1][i])
+  }
+  correct_pred_cut_off_median <- median(correct_pred_cut_off)
+  
+  ## determine accuracy of the prediction
+  pred_res <- c()
+  for (i in which(rle_diff == 1)){
+    if(test$values[i] == 1 & test$values[i+1] == 2){
+      if(test$lengths[i] + test$lengths[i+1] > correct_pred_cut_off_median){
+          pred_res <- c(pred_res,"Med-taking session")
+        } else {pred_res <- c(pred_res,"Part of med-taking session")}
+    } else {pred_res <- c(pred_res,"Not med-taking session")}
+  }
+  #pred_res_acc_median[j] <- round(sum(pred_res == true_label)/length(pred_res),2)
+  #correct_med_pred[j] <- sum(which(pred_res == "Med-taking session") == which(true_label == "Med-taking session"))
+  correct_med_pred[j] <- length(which(pred_res == "Med-taking session"))
+}
+
+data.frame(cut_off,correct_med_pred, med_session = 6)
+
+## Calculating accuracy
+Pick_up_and_open_pill_bottle_acc <- sum(as.character(temp$Label) %in% "Pick_up_and_open_pill_bottle" & as.character(temp$Pred) %in% "Pick_up_and_open_pill_bottle")/sum(as.character(temp$Label) %in% "Pick_up_and_open_pill_bottle")
+Pour_pill_return_bottle_and_take_pill_acc <- sum(as.character(temp$Label) %in% "Pour_pill_return_bottle_and_take_pill" & as.character(temp$Pred) %in% "Pour_pill_return_bottle_and_take_pill")/sum(as.character(temp$Label) %in% "Pour_pill_return_bottle_and_take_pill")
+
+## create 2x2 tables
+obs_pick_pred_pick <- sum(as.character(temp$Label) %in% "Pick_up_and_open_pill_bottle" & as.character(temp$Pred) %in% "Pick_up_and_open_pill_bottle")
+obs_pick_pred_others <- sum(as.character(temp$Label) %in% "Pick_up_and_open_pill_bottle" & !(as.character(temp$Pred) %in% "Pick_up_and_open_pill_bottle"))
+obs_pour_pred_others <- sum(as.character(temp$Label) %in% "Pour_pill_return_bottle_and_take_pill" & !(as.character(temp$Pred) %in% "Pour_pill_return_bottle_and_take_pill"))
+obs_pour_pred_pour <- sum(as.character(temp$Label) %in% "Pour_pill_return_bottle_and_take_pill" & as.character(temp$Pred) %in% "Pour_pill_return_bottle_and_take_pill")
+
+## row = obs, col = pred
+acc_mat <- matrix(c(obs_pick_pred_pick,obs_pick_pred_others,obs_pour_pred_others,obs_pour_pred_pour), byrow = TRUE, nrow = 2)
+#acc_mat
+```
+
+For this result, movelet couldn't detect the first two medication taking sessions. Specifically, the length of prediction for med taking 1 is (72,57) and for med taking 2 is (69,107,192).
+
+```{r}
+test$lengths[1:8]
+test$values[1:8]
+```
+
+The accuracy for predicting "pick up and open pill bottle" is `r round(Pick_up_and_open_pill_bottle_acc,4)` and the accuracy for predicting "pour pill, return bottle and take pill" is `r round(Pour_pill_return_bottle_and_take_pill_acc,4)`.
+
+Another way that we determine accuracy is to determine whether the prediction is med-taking related or not. Based on this definition, we construct a confusion matrix below: 
+
+```{r, calc_acc_patient_86}
+#length(test.dat.patient.86$Label)
+#length(patient86_6_meds$Pred2)
+temp2 <- data.frame(cbind(test.dat.patient.86$Label[1:length(patient86_6_meds$Pred2)], patient86_6_meds$Pred2))
+temp2$True_label <- factor(ifelse(temp2$X1 %in% c("Open_Door","Turn_Key","Eat_From_Bag"), "Not Med Taking","Med Taking"))
+temp2$Pred_label <- factor(ifelse(temp2$X2 %in% c("Wash_Hands","Look_around_in_bag_or_purse"), "Not Med Taking","Med Taking"))
+conf_mat <- confusionMatrix(data = temp2$Pred_label, reference = temp2$True_label)
+conf_mat$table
+conf_mat$overall[1]
+```
+
+## Try movelet with patient 88
+
+```{r}
+#Load Data
+# dat_86_88_89<-read.csv('/Users/quycao/Box/PipPenn/Data/Patients-86-88-89.csv',header = TRUE,stringsAsFactors = FALSE)
+# dat_88 <- subset(dat_86_88_89, PatientID == 88)
+# saveRDS(dat_88, file = "patient_88.rds")
+dat <- readRDS(file = "/Users/quycao/Box/PipPenn/Data/patient_88.rds")
+dat$Activitylabel<-match(dat$ActivityName,unique(dat$ActivityName))
+#convert time series and reorder data by time
+dat$timestamp<-substr(dat$activity_timestamp,12,23)
+dat$time<-as.numeric(hms(dat$timestamp))
+dat <- dat[sort.int(dat$time, index.return = TRUE)$ix, ]
+dat$time<-dat$time-dat$time[1]
+
+## Relabel names for wrist location
+dat$Wrist_Location <- ifelse(dat$Wrist_Location =="right     ","right","left")
+
+## remove duplicate left and right wrist to create balance data
+dat$Wrist_Location2 <- ifelse(dat$Wrist_Location == "left", 0, 1)
+keep_idx <- c()
+diff_time <- diff(dat$time)
+diff_wrist <- diff(dat$Wrist_Location2)
+
+for (i in 1:length(diff_time)){
+  if (diff_time[i] <= 0.01 & diff_wrist[i] != 0)
+  {
+    keep_idx = c(keep_idx, i, i + 1) 
+  }
+  i = i + 2
+}
+nodup_dat <- dat[keep_idx, ]
+table(nodup_dat$Wrist_Location)
+
+## extract 3 pcs for the left hand
+vars_left <- nodup_dat[nodup_dat$Wrist_Location=="left",
+                       c("accel_x_coord","accel_y_coord","accel_z_coord",
+                        "rotate_x_coord","rotate_y_coord", "rotate_z_coord",
+                        "gravity_x_coord","gravity_z_coord","gravity_y_coord",
+                        "magneto_x_coord","magneto_y_coord","magneto_z_coord",
+                        "attitude_x_coord","attitude_y_coord","attitude_z_coord")]
+varsleft.pca <- prcomp(vars_left, center=TRUE, scale.=TRUE)
+#summary(varsleft.pca)
+pcs_left <- varsleft.pca$x[,1:3]
+
+## extract 3 pcs for the right hand
+vars_right <- nodup_dat[nodup_dat$Wrist_Location=="right",
+                       c("accel_x_coord","accel_y_coord","accel_z_coord",
+                        "rotate_x_coord","rotate_y_coord", "rotate_z_coord",
+                        "gravity_x_coord","gravity_z_coord","gravity_y_coord",
+                        "magneto_x_coord","magneto_y_coord","magneto_z_coord",
+                        "attitude_x_coord","attitude_y_coord","attitude_z_coord")]
+varsright.pca <- prcomp(vars_right, center=TRUE, scale.=TRUE)
+#summary(varsright.pca)
+pcs_right <- varsright.pca$x[,1:3]
+
+pcs_combined <- cbind(pcs_left,pcs_right)
+colnames(pcs_combined) <- c("PC1_left","PC2_left","PC3_left","PC1_right","PC2_right","PC3_right")
+
+## combine data with Pcs
+ActivityName <- nodup_dat$ActivityName[nodup_dat$Wrist_Location=="left"]
+movelet.dat <- data.frame(pcs_combined, ActivityName)
+movelet.dat$ActivityName <- gsub(" ", "_", movelet.dat$ActivityName)
+
+## create accel data 
+patient.88 <- Acceleration_Create2(movelet.dat,subjectName="patient88",
+                                   n_axes = 6,frequency=50) # 50 obs per second
+## train pick up and open a pill bottle chapter
+## 1 sec = 50 obs. 
+from <- min(which(patient.88$Label == "9._Med_Taking")) + 200
+to <- min(which(patient.88$Label == "9._Med_Taking")) + 350 
+Ch.Pick_up_and_open_pill_bottle.patient88 <- Movelet_Create2(FROM = from ,TO = to, 
+                                    DATA = patient.88, n_axes = 6,
+                                    ChapName = "Pick_up_and_open_pill_bottle")
+## train pour pill, return bottle and take pill chapter 
+from <- min(which(patient.88$Label == "9._Med_Taking")) + 350
+to <- min(which(patient.88$Label == "9._Med_Taking")) + 500 
+Ch.Pour_pill_return_bottle_and_take_pill.patient88 <- Movelet_Create2(FROM = from ,TO = to, 
+                                    DATA = patient.88, n_axes = 6,
+                                    ChapName = "Pour_pill_return_bottle_and_take_pill")
+## train Wash_Hands chapter
+from <- min(which(patient.88$Label == "Wash_Hands"))
+to <- max(which(patient.88$Label == "Wash_Hands"))
+Ch.Wash_Hands.patient88 <- Movelet_Create2(FROM = from ,TO = to,
+                                    DATA = patient.88, n_axes = 6,
+                                    ChapName = "Wash_Hands")
+## train Look_around_in_bag_or_purse chapter
+from <- min(which(patient.88$Label == "Look_around_in_bag_or_purse"))
+to <- max(which(patient.88$Label == "Look_around_in_bag_or_purse"))
+Ch.Look_around_in_bag_or_purse.patient88 <- Movelet_Create2(FROM = from ,TO = to,
+                                    DATA = patient.88, n_axes = 6,
+                                    ChapName = "Look_around_in_bag_or_purse")
+## test data
+test.dat <- subset(movelet.dat, ActivityName %in% c("Turn_Key","Open_Door","Eat_From_Bag","4._Med_Taking","5._Med_Taking","6._Med_Taking","7._Med_Taking","8._Med_Taking","10._Med_Taking","11._Med_Taking","12._Med_Taking"))
+test.dat.patient.88 <- Acceleration_Create2(test.dat,subjectName="patient88",n_axes = 6,frequency=50) 
+train.label=c("Pick_up_and_open_pill_bottle","Pour_pill_return_bottle_and_take_pill","Wash_Hands","Look_around_in_bag_or_purse")
+```
+
+```{r, eval = FALSE}
+#expand the prediction activity labels to include all trained chapters
+pred <- Movelet_Pred2(test.dat.patient.88, Act.Names=train.label, vote=TRUE)
+# Save it
+#saveRDS(pred, file = "patient86_6pcs_both_separated_wrists_pred.rds")
+saveRDS(pred, file = "patient88_8_meds.rds")
+```
+
+```{r}
+# load it
+patient88_8_meds <- readRDS(file = "patient88_8_meds.rds")
+patient88_8_meds$Pred2 <- recode(patient88_8_meds$Pred, `1`="Pick_up_and_open_pill_bottle", `2`="Pour_pill_return_bottle_and_take_pill", `3`="Wash_Hands", `4`="Look_around_in_bag_or_purse")
+```
+
+```{r, eval = FALSE}
+## add label for trained activities
+test.dat.patient.88$Label2 <- test.dat.patient.88$Label
+test.dat.patient.88$Label2[c(
+ min(which(test.dat$ActivityName == "4._Med_Taking")+ 50):
+ min(which(test.dat$ActivityName == "4._Med_Taking")+ 200),
+ min(which(test.dat$ActivityName == "5._Med_Taking")+ 50):
+ min(which(test.dat$ActivityName == "5._Med_Taking")+ 200),
+ min(which(test.dat$ActivityName == "6._Med_Taking")+ 100):
+ min(which(test.dat$ActivityName == "6._Med_Taking")+ 250),
+ min(which(test.dat$ActivityName == "7._Med_Taking")+ 200):
+ min(which(test.dat$ActivityName == "7._Med_Taking")+ 350),
+ min(which(test.dat$ActivityName == "8._Med_Taking")+ 150):
+ min(which(test.dat$ActivityName == "8._Med_Taking")+ 300),
+ min(which(test.dat$ActivityName == "10._Med_Taking")+ 150):
+ min(which(test.dat$ActivityName == "10._Med_Taking")+ 350),
+ min(which(test.dat$ActivityName == "11._Med_Taking")+ 100):
+ min(which(test.dat$ActivityName == "11._Med_Taking")+ 300),
+ min(which(test.dat$ActivityName == "12._Med_Taking")+ 200):
+ min(which(test.dat$ActivityName == "12._Med_Taking")+ 350)
+ )] <- "Pick_up_and_open_pill_bottle"
+
+test.dat.patient.88$Label2[c(
+ min(which(test.dat$ActivityName == "4._Med_Taking")+ 201):
+ min(which(test.dat$ActivityName == "4._Med_Taking")+ 450),
+ min(which(test.dat$ActivityName == "5._Med_Taking")+ 201):
+ min(which(test.dat$ActivityName == "5._Med_Taking")+ 350),
+ min(which(test.dat$ActivityName == "6._Med_Taking") + 251):
+ min(which(test.dat$ActivityName == "6._Med_Taking") + 400),
+ min(which(test.dat$ActivityName == "7._Med_Taking") + 351):
+ min(which(test.dat$ActivityName == "7._Med_Taking") + 500),
+ min(which(test.dat$ActivityName == "8._Med_Taking") + 301):
+ min(which(test.dat$ActivityName == "8._Med_Taking") + 400),
+ min(which(test.dat$ActivityName == "10._Med_Taking") + 351):
+ min(which(test.dat$ActivityName == "10._Med_Taking") + 550),
+ min(which(test.dat$ActivityName == "11._Med_Taking") + 301):
+ min(which(test.dat$ActivityName == "11._Med_Taking") + 500),
+ min(which(test.dat$ActivityName == "12._Med_Taking") + 351):
+ min(which(test.dat$ActivityName == "12._Med_Taking") + 500)
+ )] <- "Pour_pill_return_bottle_and_take_pill"
+
+temp <- data.frame(cbind(test.dat.patient.88$Label2, patient88_8_meds$Pred2, 
+                         patient88_8_meds$Pred))
+colnames(temp) <- c("Label","Pred","Pred_num")
+temp <- temp[test.dat.patient.88$Label2 %in% c("Pick_up_and_open_pill_bottle","Pour_pill_return_bottle_and_take_pill"), ]
+
+## determine number of med taking activities and their location in the data
+train <- rle(as.character(temp$Label))
+test <- rle(as.numeric(temp$Pred_num))
+rle_diff <- diff(test$values)
+Pick_up_and_open_pill_bottle_idx <- which(train$values == "Pick_up_and_open_pill_bottle")
+
+## how many % of correct prediction needed to classify a correct prediction?
+cut_off <- seq(0.50,0.7,0.05)
+pred_res_acc_median <- c()
+correct_med_pred <- c()
+#true_label <-  c("Other activities","Med-taking session","Other activities","Med-taking session","Not Med-taking session","Other activities","Med-taking session","Other activities","Med-taking session","Other activities")
+for (j in 1:length(cut_off)){
+  ## determine the cut off for prediction length
+  correct_pred_cut_off <- c()
+  for(i in 1:length(Pick_up_and_open_pill_bottle_idx)){
+    correct_pred_cut_off[i] <- cut_off[j] * sum(train$lengths[Pick_up_and_open_pill_bottle_idx][i] + train$lengths[Pick_up_and_open_pill_bottle_idx + 1][i])
+  }
+  correct_pred_cut_off_median <- median(correct_pred_cut_off)
+  
+  ## determine accuracy of the prediction
+  pred_res <- c()
+  for (i in which(rle_diff == 1)){
+    if(test$values[i] == 1 & test$values[i+1] == 2){
+      if(test$lengths[i] + test$lengths[i+1] > correct_pred_cut_off_median){
+          pred_res <- c(pred_res,"Med-taking session")
+        } else {pred_res <- c(pred_res,"Part of med-taking session")}
+    } else {pred_res <- c(pred_res,"Not med-taking session")}
+  }
+  #pred_res_acc_median[j] <- round(sum(pred_res == true_label)/length(pred_res),2)
+  #correct_med_pred[j] <- sum(which(pred_res == "Med-taking session") == which(true_label == "Med-taking session"))
+  correct_med_pred[j] <- length(which(pred_res == "Med-taking session"))
+}
+
+data.frame(cut_off,correct_med_pred, med_session = 8)
+
+## Calculating accuracy
+Pick_up_and_open_pill_bottle_acc <- sum(as.character(temp$Label) %in% "Pick_up_and_open_pill_bottle" & as.character(temp$Pred) %in% "Pick_up_and_open_pill_bottle")/sum(as.character(temp$Label) %in% "Pick_up_and_open_pill_bottle")
+Pour_pill_return_bottle_and_take_pill_acc <- sum(as.character(temp$Label) %in% "Pour_pill_return_bottle_and_take_pill" & as.character(temp$Pred) %in% "Pour_pill_return_bottle_and_take_pill")/sum(as.character(temp$Label) %in% "Pour_pill_return_bottle_and_take_pill")
+
+## create 2x2 tables
+obs_pick_pred_pick <- sum(as.character(temp$Label) %in% "Pick_up_and_open_pill_bottle" & as.character(temp$Pred) %in% "Pick_up_and_open_pill_bottle")
+obs_pick_pred_others <- sum(as.character(temp$Label) %in% "Pick_up_and_open_pill_bottle" & !(as.character(temp$Pred) %in% "Pick_up_and_open_pill_bottle"))
+obs_pour_pred_others <- sum(as.character(temp$Label) %in% "Pour_pill_return_bottle_and_take_pill" & !(as.character(temp$Pred) %in% "Pour_pill_return_bottle_and_take_pill"))
+obs_pour_pred_pour <- sum(as.character(temp$Label) %in% "Pour_pill_return_bottle_and_take_pill" & as.character(temp$Pred) %in% "Pour_pill_return_bottle_and_take_pill")
+
+## row = obs, col = pred
+acc_mat <- matrix(c(obs_pick_pred_pick,obs_pick_pred_others,obs_pour_pred_others,obs_pour_pred_pour), byrow = TRUE, nrow = 2)
+#acc_mat
+```
+
+```{r, calc_acc_patient_88}
+#length(test.dat.patient.86$Label)
+#length(patient86_6_meds$Pred2)
+temp2 <- data.frame(cbind(test.dat.patient.88$Label[1:length(patient88_8_meds$Pred2)], patient88_8_meds$Pred2))
+temp2$True_label <- factor(ifelse(temp2$X1 %in% c("Open_Door","Turn_Key","Eat_From_Bag"), "Not Med Taking","Med Taking"))
+temp2$Pred_label <- factor(ifelse(temp2$X2 %in% c("Wash_Hands","Look_around_in_bag_or_purse"), "Not Med Taking","Med Taking"))
+conf_mat <- confusionMatrix(data = temp2$Pred_label, reference = temp2$True_label)
+conf_mat$table
+conf_mat$overall[1]
+```
+
+
