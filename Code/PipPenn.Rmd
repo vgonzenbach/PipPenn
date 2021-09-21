@@ -1,6 +1,6 @@
 ---
 title: "PipPenn Data Analysis"
-author: "Quy Cao and Haochang Shou"
+author: "Quy Cao, Haochang Shou, Virgilio Gonzenbach"
 output: html_document
 ---
 
@@ -8,6 +8,7 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE, fig.align = "center",
                       message = FALSE, warning = FALSE,
                       fig.width = 10)
+knitr::opts_knit$set(root.dir = rprojroot::find_rstudio_root_file())
 
 options(scipen=999)
 
@@ -23,8 +24,9 @@ library(zoo)
 library("factoextra") ## plot pcs
 library(kernlab)      # SVM methodology
 library(e1071)        # SVM methodology
-#library(Movelet)
+library(Movelet)
 library(dplyr)
+library(stringr)
 ```
 
 ## Exploration of the Time Series Data
@@ -35,66 +37,75 @@ Currently we have data from 10 subjects. Here we only show the examples from Pat
 
 #Load Data
 #dat<-read.csv('/Users/hshou/Box/PipPenn/Data/patient52.csv',header = TRUE,stringsAsFactors = FALSE)
-dat<-read.csv('data/patient52.csv',header = TRUE,stringsAsFactors = FALSE)
+dat<-read.csv('Data/patient52.csv', header = TRUE,stringsAsFactors = FALSE)
 
 #convert time series
-dat$timestamp<-substr(dat$activity_timestamp,12,23)
-dat$time<-as.numeric(hms(dat$timestamp))
-dat$time<-dat$time-dat$time[1]
-act.name<-unique(dat$ActivityName)
+convertTimeSeries = function(df){
+  
+  makeNumericTime = function(){
+    timestamp <- substr(df$activity_timestamp,12,23)
+    time<-as.numeric(hms(timestamp))
+    time<- time-time[1]
+    return(time)
+  }
+  
+  df$time = makeNumericTime()
+  
+  # Convert activity name to numeric label
+  df$Activitylabel <- match(df$ActivityName,
+                            unique(df$ActivityName))
+  
+  return(df)
+}
 
-dat$Activitylabel<-match(dat$ActivityName,unique(dat$ActivityName))
+dat = convertTimeSeries(dat)
+dat$Wrist_Location = gsub(" ", "", dat$Wrist_Location, fixed = TRUE) %>% factor()
 ```  
 
 The code for activity types are 
+
 ```{r actname,echo=FALSE}
-print(unique(dat$ActivityName))
+data.frame(Label = 1:length(unique(dat$ActivityName)), Name= unique(dat$ActivityName))
 ```
 
+
 ```{r plot, echo=FALSE}
-wrist.type<-unique(dat$Wrist_Location)
+plotTimeSeries = function(df, vars=c("accel", "rotate", "attitude", "gravity", "magneto"), wrist = "right", plotLabel=TRUE){
+  
+  if(plotLabel){
+    df = df %>% filter(Wrist_Location == wrist) %>% select(time, starts_with(vars), Activitylabel)
+  }else{
+    df = df %>% filter(Wrist_Location == wrist) %>% select(time, starts_with(vars))
+  }
+  df %>% dygraph(main=paste('Patient', df$PatientID[1], str_to_title(vars), str_to_title(wrist),'Wrist')) %>% 
+    dyAxis("x", drawGrid = FALSE) %>%
+    dyOptions(colors = RColorBrewer::brewer.pal(7, "Set1")) %>%
+    dyRangeSelector()
+}
 
-wrist.r<-which(dat$Wrist_Location==wrist.type[1]) #right wrist
-wrist.l<-which(dat$Wrist_Location==wrist.type[2])
-
-dygraph(data=dat[wrist.r,c('time',names(dat)[c(8:10,30)])],main=paste('Patient', dat$PatientID[1],' Accel Right Wrist',sep=''))%>% 
-  dyAxis("x", drawGrid = FALSE) %>%
-  dyOptions(colors = RColorBrewer::brewer.pal(7, "Set1"))  %>%
-  dyRangeSelector()
-
-dygraph(data=dat[wrist.r,c('time',names(dat)[c(11:13,30)])],main=paste('Patient', dat$PatientID[1],' Rotation Right Wrist',sep=''))%>% 
-  dyAxis("x", drawGrid = FALSE) %>%
-  dyOptions(colors = RColorBrewer::brewer.pal(7, "Set1"))  %>%
-  dyRangeSelector()
-
-dygraph(data=dat[wrist.r,c('time',names(dat)[c(20:22,30)])],main=paste('Patient', dat$PatientID[1],' Attitude Right Wrist',sep=''))%>% 
-  dyAxis("x", drawGrid = FALSE) %>%
-  dyOptions(colors = RColorBrewer::brewer.pal(7, "Set1"))  %>%
-  dyRangeSelector()
-
-dygraph(data=dat[wrist.r,c('time',names(dat)[c(14:16,30)])],main=paste('Patient', dat$PatientID[1],' Gravity Right Wrist',sep=''))%>% 
-  dyAxis("x", drawGrid = FALSE) %>%
-  dyOptions(colors = RColorBrewer::brewer.pal(7, "Set1"))  %>%
-  dyRangeSelector()
-
-dygraph(data=dat[wrist.r,c('time',names(dat)[c(17:19,30)])],main=paste('Patient', dat$PatientID[1],' Magentic Right Wrist',sep=''))%>% 
-  dyAxis("x", drawGrid = FALSE) %>%
-  dyOptions(colors = RColorBrewer::brewer.pal(7, "Set1"))  %>%
-  dyRangeSelector()
+plotTimeSeries(dat, "accel", "right")
+plotTimeSeries(dat, "rotate", "right")
+plotTimeSeries(dat, "attitude", "right")
+plotTimeSeries(dat, "gravity", "right")
+plotTimeSeries(dat, "magneto", "right")
 ```
 
 Consider "8.Med taking" chunk of activities for analysis.
 
 ```{r,eval=FALSE}
-## look at 8.med taking
+## select 8.Med taking
 med_taking_8 <- subset(dat, Activitylabel == 16)
 #dim(med_taking_8)
 #min(med_taking_8$time)
+
+# padding around activity
 med_taking_8$mini_activity <- factor(ifelse(med_taking_8$time > (min(med_taking_8$time)+2)
                                             & med_taking_8$time < (min(med_taking_8$time)+4),
                                             "Open Bottle","Others"), levels = c("Others","Open Bottle"))
 ## check mini activity
 table(med_taking_8$mini_activity)
+
+plotTimeSeries(med_taking_8, "accel", plotLabel = FALSE)
 
 ## check correlation
 corrplot(cor(med_taking_8[,c("accel_x_coord","accel_y_coord","accel_z_coord",
@@ -154,8 +165,7 @@ svm.df <- med_taking_8[, c("mini_activity","accel_x_coord","accel_y_coord","acce
 svmfit <- svm(mini_activity ~ ., data = svm.df, kernel = "polynomial", cost = 1)
 summary(svmfit)
 ## Create a table of misclassified observations
-ypred <- predict(svmfit, svm.df)
-(misclass <- table(predict = ypred, truth = svm.df$mini_activity)) ## NOPE
+(misclass <- table(predict = svmfit$fitted, truth = svm.df$mini_activity)) ## NOPE
 ```
 
 I also study the movelet package. Thanks to Jiawei example, I was able to put together a workflow and this is what I got:
@@ -171,7 +181,7 @@ STEP 4: Validate results using *Movelet_Validation*
 Example:
 
 ```{r, eval = FALSE}
-data.Sample5 <- Acceleration_Create("data_label.csv",subjectName="Sample5",frequency=30)
+data.Sample5 <- Acceleration_Create("Data/data_label.csv",subjectName="Sample5",frequency=30)
 Ch.sedentary_act.Sample5 <- Movelet_Create(5701,5761,data.Sample5, "sedentary_act")
 pred <- Movelet_Pred(data.Sample5,Act.Names=c("sedentary_act"),vote=TRUE)
 validation <- Movelet_Validation(data.Sample5, Prediction = pred, Act.Names=c("sedentary_act"))
@@ -1156,7 +1166,7 @@ vars_left <- nodup_dat[nodup_dat$Wrist_Location=="left",
                         "gravity_x_coord","gravity_z_coord","gravity_y_coord",
                         "magneto_x_coord","magneto_y_coord","magneto_z_coord",
                         "attitude_x_coord","attitude_y_coord","attitude_z_coord")]
-varsleft.pca <- prcomp(vars_left, center=TRUE, scale.=TRUE)
+varsleft.pca <- prcomp(vars_left, center=TRUE, scale=TRUE)
 #summary(varsleft.pca)
 pcs_left <- varsleft.pca$x[,1:3]
 
