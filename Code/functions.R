@@ -1,6 +1,5 @@
-library(lubridate)
-
-
+library(lubridate
+)
 run_pca = function(dat)
 {
   dat$Activitylabel<-match(dat$ActivityName,unique(dat$ActivityName))
@@ -192,8 +191,8 @@ eval_prediction = function(test.movelet.dat, pred, n_control_acts)
   ## Predict number of med taking session!
   ## test.movelet.dat is the result of accel_create2 function
   ## pred is the result of the movelet_pred2 function
-  ## n_control_acts is the number of trained activities that are not med-taking
-  temp <- data.frame(cbind(test.movelet.dat$Label, pred$Pred2, 
+  ## n_control_acts is the number of test activities that are not med-taking
+  temp <- data.frame(cbind(test.movelet.dat$Label[1:length(pred$Pred2)], pred$Pred2, 
                            pred$Pred))
   colnames(temp) <- c("Label","Pred","Pred_num")
   temp$Pred2 <- factor(ifelse(temp$Pred %in% c("Wash_Hands","Look_around_in_bag_or_purse"), "Not Med Taking","Med Taking"))
@@ -202,9 +201,10 @@ eval_prediction = function(test.movelet.dat, pred, n_control_acts)
   train <- rle(as.character(temp$Label))
   test <- rle(as.numeric(temp$Pred2_num))
   med_taking_start_idx <- (cumsum(train$lengths)+1)[n_control_acts:length(train$lengths)]
+  med_session <- length(med_taking_start_idx) - 1
   med_length <- train$lengths[grep("Med_Taking",train$values)]
   
-  cut_off <- seq(0.50,0.90,0.05)
+  cut_off <- seq(0.50,0.75,0.05)
   correct_med_pred <- c()
   for(j in 1:length(cut_off)){
     ## define cut off
@@ -224,7 +224,7 @@ eval_prediction = function(test.movelet.dat, pred, n_control_acts)
   temp2$Pred_label <- factor(ifelse(temp2$X2 %in% c("Wash_Hands","Look_around_in_bag_or_purse"), "Not Med Taking","Med Taking"))
   conf_mat <- confusionMatrix(data = temp2$Pred_label, reference = temp2$True_label)
   
-  return(list(Session = data.frame(cut_off,correct_med_pred, med_session = 6), Accuracy = conf_mat))
+  return(list(Session = data.frame(cut_off,correct_med_pred, med_session), Accuracy = conf_mat))
 }
 
 

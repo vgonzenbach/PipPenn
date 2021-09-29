@@ -1,7 +1,7 @@
 # Train and run prediction on patient
 
 setwd(rprojroot::find_rstudio_root_file()) 
-source("Code/functions-1.R")
+source("Code/functions.R")
 library(dplyr)
 library(caret)
 
