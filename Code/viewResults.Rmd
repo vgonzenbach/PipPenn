@@ -21,10 +21,11 @@ source("Code/functions.R")
 3 Training Modes are shown:  
 
 1. Training on 1 med taking session (i.e. session 6) + Wash Hands, Look Around Purse as Control Activities. 
-1. Training on 5 med taking session (i.e. session 3, 6, 9, 12, 15) + Wash Hands, Look Around Purse and Walk as Control Activities.
+1. Training on 3 med taking session (i.e. sessions 6, 9, 12) + Wash Hands, Look Around Purse and Walk as Control Activities.
 1. Training on 4 med taking session (i.e. session 3, 6, 9, 12) + Wash Hands, Look Around Purse and Walk as Control Activities.
+1. Training on 5 med taking session (i.e. session 3, 6, 9, 12, 15) + Wash Hands, Look Around Purse and Walk as Control Activities.
 
-All modes were tested on the same set of activities, namely: `r knitr::combine_words(c("Turn_Key","Open_Door","Eat_From_Bag","4._Med_Taking","5._Med_Taking","7._Med_Taking","8._Med_Taking","10._Med_Taking","11._Med_Taking", "13._Med_Taking", "14._Med_Taking"))`
+All modes were tested on the same set of activities, namely: `r knitr::combine_words(c("Turn_Key","Open_Door","Eat_From_Bag","4._Med_Taking","5._Med_Taking","7._Med_Taking","8._Med_Taking","10._Med_Taking","11._Med_Taking", "13._Med_Taking", "14._Med_Taking", "15._Med_Taking"))` - except for `5_ses_train` where `15._Med_Taking` was not tested for. 
 
 ```{r, echo=FALSE}
 loadPrediction = function(patient, mode){

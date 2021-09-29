@@ -176,10 +176,11 @@ pre code {
 <p>3 Training Modes are shown:</p>
 <ol style="list-style-type: decimal">
 <li>Training on 1 med taking session (i.e. session 6) + Wash Hands, Look Around Purse as Control Activities.</li>
-<li>Training on 5 med taking session (i.e. session 3, 6, 9, 12, 15) + Wash Hands, Look Around Purse and Walk as Control Activities.</li>
+<li>Training on 3 med taking session (i.e. sessions 6, 9, 12) + Wash Hands, Look Around Purse and Walk as Control Activities.</li>
 <li>Training on 4 med taking session (i.e. session 3, 6, 9, 12) + Wash Hands, Look Around Purse and Walk as Control Activities.</li>
+<li>Training on 5 med taking session (i.e. session 3, 6, 9, 12, 15) + Wash Hands, Look Around Purse and Walk as Control Activities.</li>
 </ol>
-<p>All modes were tested on the same set of activities, namely: Turn_Key, Open_Door, Eat_From_Bag, 4._Med_Taking, 5._Med_Taking, 7._Med_Taking, 8._Med_Taking, 10._Med_Taking, 11._Med_Taking, 13._Med_Taking, and 14._Med_Taking</p>
+<p>All modes were tested on the same set of activities, namely: Turn_Key, Open_Door, Eat_From_Bag, 4._Med_Taking, 5._Med_Taking, 7._Med_Taking, 8._Med_Taking, 10._Med_Taking, 11._Med_Taking, 13._Med_Taking, 14._Med_Taking, and 15._Med_Taking - except for <code>5_ses_train</code> where <code>15._Med_Taking</code> was not tested for.</p>
 <div id="overall-results" class="section level2">
 <h2>Overall results</h2>
 <div id="training-with-1-med-session" class="section level3">
@@ -193,8 +194,19 @@ pre code {
 ## Sensitivity Specificity  Youden&#39;s J 
 ##   0.8091506   0.6663606   0.4755112</code></pre>
 </div>
-<div id="training-with-5-med-sessions" class="section level3">
-<h3>Training with 5 med sessions</h3>
+<div id="training-with-3-med-sessions" class="section level3">
+<h3>Training with 3 med sessions</h3>
+<pre><code>##                 Reference
+## Prediction       Med Taking Not Med Taking
+##   Med Taking          67304           9027
+##   Not Med Taking       2615           4044
+##  Accuracy 
+## 0.8532886 
+## Sensitivity Specificity  Youden&#39;s J 
+##   0.9625996   0.3093872   0.2719868</code></pre>
+</div>
+<div id="training-with-4-med-sessions" class="section level3">
+<h3>Training with 4 med sessions</h3>
 <pre><code>##                 Reference
 ## Prediction       Med Taking Not Med Taking
 ##   Med Taking          69919          13071
@@ -204,8 +216,8 @@ pre code {
 ## Sensitivity Specificity  Youden&#39;s J 
 ##           1           0           0</code></pre>
 </div>
-<div id="training-with-4-med-sessions" class="section level3">
-<h3>Training with 4 med sessions</h3>
+<div id="training-with-5-med-sessions" class="section level3">
+<h3>Training with 5 med sessions</h3>
 <pre><code>##                 Reference
 ## Prediction       Med Taking Not Med Taking
 ##   Med Taking          69919          13071
@@ -226,10 +238,7 @@ pre code {
 ## 3    0.60                3           6
 ## 4    0.65                3           6
 ## 5    0.70                3           6
-## 6    0.75                1           6
-## 7    0.80                1           6
-## 8    0.85                1           6
-## 9    0.90                1           6</code></pre>
+## 6    0.75                1           6</code></pre>
 <pre><code>##                 Reference
 ## Prediction       Med Taking Not Med Taking
 ##   Med Taking           6035            488
@@ -239,18 +248,33 @@ pre code {
 <pre><code>## Sensitivity Specificity  Youden&#39;s J 
 ##   0.6531385   0.7284363   0.3815748</code></pre>
 </div>
-<div id="training-with-5-med-sessions-1" class="section level3">
-<h3>Training with 5 med sessions</h3>
+<div id="training-with-3-med-session" class="section level3">
+<h3>Training with 3 med session</h3>
 <pre><code>##   cut_off correct_med_pred med_session
 ## 1    0.50                6           6
 ## 2    0.55                6           6
 ## 3    0.60                6           6
 ## 4    0.65                6           6
 ## 5    0.70                5           6
-## 6    0.75                4           6
-## 7    0.80                4           6
-## 8    0.85                4           6
-## 9    0.90                3           6</code></pre>
+## 6    0.75                5           6</code></pre>
+<pre><code>##                 Reference
+## Prediction       Med Taking Not Med Taking
+##   Med Taking           8964            945
+##   Not Med Taking        276            852</code></pre>
+<pre><code>##  Accuracy 
+## 0.8893721</code></pre>
+<pre><code>## Sensitivity Specificity  Youden&#39;s J 
+##   0.9701299   0.4741235   0.4442534</code></pre>
+</div>
+<div id="training-with-4-med-sessions-1" class="section level3">
+<h3>Training with 4 med sessions</h3>
+<pre><code>##   cut_off correct_med_pred med_session
+## 1    0.50                6           6
+## 2    0.55                6           6
+## 3    0.60                6           6
+## 4    0.65                6           6
+## 5    0.70                5           6
+## 6    0.75                5           6</code></pre>
 <pre><code>##                 Reference
 ## Prediction       Med Taking Not Med Taking
 ##   Med Taking           9240           1797
@@ -260,8 +284,8 @@ pre code {
 <pre><code>## Sensitivity Specificity  Youden&#39;s J 
 ##           1           0           0</code></pre>
 </div>
-<div id="training-with-4-med-sessions-1" class="section level3">
-<h3>Training with 4 med sessions</h3>
+<div id="training-with-5-med-sessions-1" class="section level3">
+<h3>Training with 5 med sessions</h3>
 <pre><code>##   cut_off correct_med_pred med_session
 ## 1    0.50                6           6
 ## 2    0.55                6           6
@@ -292,10 +316,7 @@ pre code {
 ## 3    0.60                6           6
 ## 4    0.65                5           6
 ## 5    0.70                4           6
-## 6    0.75                2           6
-## 7    0.80                1           6
-## 8    0.85                1           6
-## 9    0.90                1           6</code></pre>
+## 6    0.75                2           6</code></pre>
 <pre><code>##                 Reference
 ## Prediction       Med Taking Not Med Taking
 ##   Med Taking           7452            657
@@ -305,18 +326,33 @@ pre code {
 <pre><code>## Sensitivity Specificity  Youden&#39;s J 
 ##   0.8659075   0.4950038   0.3609113</code></pre>
 </div>
-<div id="training-with-5-med-sessions-2" class="section level3">
-<h3>Training with 5 med sessions</h3>
+<div id="training-with-3-med-session-1" class="section level3">
+<h3>Training with 3 med session</h3>
 <pre><code>##   cut_off correct_med_pred med_session
 ## 1    0.50                6           6
 ## 2    0.55                6           6
 ## 3    0.60                6           6
 ## 4    0.65                5           6
 ## 5    0.70                4           6
-## 6    0.75                4           6
-## 7    0.80                4           6
-## 8    0.85                4           6
-## 9    0.90                4           6</code></pre>
+## 6    0.75                4           6</code></pre>
+<pre><code>##                 Reference
+## Prediction       Med Taking Not Med Taking
+##   Med Taking           8395           1089
+##   Not Med Taking        211            212</code></pre>
+<pre><code>##  Accuracy 
+## 0.8687797</code></pre>
+<pre><code>## Sensitivity Specificity  Youden&#39;s J 
+##   0.9754822   0.1629516   0.1384338</code></pre>
+</div>
+<div id="training-with-4-med-sessions-2" class="section level3">
+<h3>Training with 4 med sessions</h3>
+<pre><code>##   cut_off correct_med_pred med_session
+## 1    0.50                6           6
+## 2    0.55                6           6
+## 3    0.60                6           6
+## 4    0.65                5           6
+## 5    0.70                4           6
+## 6    0.75                4           6</code></pre>
 <pre><code>##                 Reference
 ## Prediction       Med Taking Not Med Taking
 ##   Med Taking           8606           1301
@@ -326,8 +362,8 @@ pre code {
 <pre><code>## Sensitivity Specificity  Youden&#39;s J 
 ##           1           0           0</code></pre>
 </div>
-<div id="training-with-4-med-sessions-2" class="section level3">
-<h3>Training with 4 med sessions</h3>
+<div id="training-with-5-med-sessions-2" class="section level3">
+<h3>Training with 5 med sessions</h3>
 <pre><code>##   cut_off correct_med_pred med_session
 ## 1    0.50                6           6
 ## 2    0.55                6           6
@@ -358,10 +394,7 @@ pre code {
 ## 3    0.60                3           6
 ## 4    0.65                2           6
 ## 5    0.70                2           6
-## 6    0.75                1           6
-## 7    0.80                0           6
-## 8    0.85                0           6
-## 9    0.90                0           6</code></pre>
+## 6    0.75                1           6</code></pre>
 <pre><code>##                 Reference
 ## Prediction       Med Taking Not Med Taking
 ##   Med Taking           3796            326
@@ -371,18 +404,33 @@ pre code {
 <pre><code>## Sensitivity Specificity  Youden&#39;s J 
 ##   0.6865618   0.7299089   0.4164706</code></pre>
 </div>
-<div id="training-with-5-med-sessions-3" class="section level3">
-<h3>Training with 5 med sessions</h3>
+<div id="training-with-3-med-session-2" class="section level3">
+<h3>Training with 3 med session</h3>
 <pre><code>##   cut_off correct_med_pred med_session
 ## 1    0.50                6           6
 ## 2    0.55                6           6
 ## 3    0.60                6           6
 ## 4    0.65                6           6
 ## 5    0.70                6           6
-## 6    0.75                6           6
-## 7    0.80                4           6
-## 8    0.85                4           6
-## 9    0.90                3           6</code></pre>
+## 6    0.75                6           6</code></pre>
+<pre><code>##                 Reference
+## Prediction       Med Taking Not Med Taking
+##   Med Taking           5362           1053
+##   Not Med Taking        167            154</code></pre>
+<pre><code>##  Accuracy 
+## 0.8188836</code></pre>
+<pre><code>## Sensitivity Specificity  Youden&#39;s J 
+##  0.96979562  0.12758906  0.09738469</code></pre>
+</div>
+<div id="training-with-4-med-sessions-3" class="section level3">
+<h3>Training with 4 med sessions</h3>
+<pre><code>##   cut_off correct_med_pred med_session
+## 1    0.50                6           6
+## 2    0.55                6           6
+## 3    0.60                6           6
+## 4    0.65                6           6
+## 5    0.70                6           6
+## 6    0.75                6           6</code></pre>
 <pre><code>##                 Reference
 ## Prediction       Med Taking Not Med Taking
 ##   Med Taking           5529           1207
@@ -392,8 +440,8 @@ pre code {
 <pre><code>## Sensitivity Specificity  Youden&#39;s J 
 ##           1           0           0</code></pre>
 </div>
-<div id="training-with-4-med-sessions-3" class="section level3">
-<h3>Training with 4 med sessions</h3>
+<div id="training-with-5-med-sessions-3" class="section level3">
+<h3>Training with 5 med sessions</h3>
 <pre><code>##   cut_off correct_med_pred med_session
 ## 1    0.50                6           6
 ## 2    0.55                6           6
@@ -422,12 +470,9 @@ pre code {
 ## 1    0.50                6           6
 ## 2    0.55                6           6
 ## 3    0.60                5           6
-## 4    0.65                4           6
+## 4    0.65                5           6
 ## 5    0.70                4           6
-## 6    0.75                4           6
-## 7    0.80                2           6
-## 8    0.85                1           6
-## 9    0.90                1           6</code></pre>
+## 6    0.75                4           6</code></pre>
 <pre><code>##                 Reference
 ## Prediction       Med Taking Not Med Taking
 ##   Med Taking           5235            413
@@ -437,18 +482,33 @@ pre code {
 <pre><code>## Sensitivity Specificity  Youden&#39;s J 
 ##   0.8641466   0.6871212   0.5512678</code></pre>
 </div>
-<div id="training-with-5-med-sessions-4" class="section level3">
-<h3>Training with 5 med sessions</h3>
+<div id="training-with-3-med-session-3" class="section level3">
+<h3>Training with 3 med session</h3>
 <pre><code>##   cut_off correct_med_pred med_session
 ## 1    0.50                6           6
 ## 2    0.55                6           6
 ## 3    0.60                6           6
 ## 4    0.65                5           6
+## 5    0.70                4           6
+## 6    0.75                4           6</code></pre>
+<pre><code>##                 Reference
+## Prediction       Med Taking Not Med Taking
+##   Med Taking           5807            827
+##   Not Med Taking        251            493</code></pre>
+<pre><code>##  Accuracy 
+## 0.8538899</code></pre>
+<pre><code>## Sensitivity Specificity  Youden&#39;s J 
+##   0.9585672   0.3734848   0.3320520</code></pre>
+</div>
+<div id="training-with-4-med-sessions-4" class="section level3">
+<h3>Training with 4 med sessions</h3>
+<pre><code>##   cut_off correct_med_pred med_session
+## 1    0.50                6           6
+## 2    0.55                6           6
+## 3    0.60                6           6
+## 4    0.65                6           6
 ## 5    0.70                5           6
-## 6    0.75                4           6
-## 7    0.80                4           6
-## 8    0.85                3           6
-## 9    0.90                3           6</code></pre>
+## 6    0.75                5           6</code></pre>
 <pre><code>##                 Reference
 ## Prediction       Med Taking Not Med Taking
 ##   Med Taking           6058           1320
@@ -458,8 +518,8 @@ pre code {
 <pre><code>## Sensitivity Specificity  Youden&#39;s J 
 ##           1           0           0</code></pre>
 </div>
-<div id="training-with-4-med-sessions-4" class="section level3">
-<h3>Training with 4 med sessions</h3>
+<div id="training-with-5-med-sessions-4" class="section level3">
+<h3>Training with 5 med sessions</h3>
 <pre><code>##   cut_off correct_med_pred med_session
 ## 1    0.50                6           6
 ## 2    0.55                6           6
@@ -490,10 +550,7 @@ pre code {
 ## 3    0.60                3           6
 ## 4    0.65                2           6
 ## 5    0.70                2           6
-## 6    0.75                1           6
-## 7    0.80                1           6
-## 8    0.85                0           6
-## 9    0.90                0           6</code></pre>
+## 6    0.75                1           6</code></pre>
 <pre><code>##                 Reference
 ## Prediction       Med Taking Not Med Taking
 ##   Med Taking           3206            399
@@ -503,18 +560,33 @@ pre code {
 <pre><code>## Sensitivity Specificity  Youden&#39;s J 
 ##   0.5482216   0.5817610   0.1299826</code></pre>
 </div>
-<div id="training-with-5-med-sessions-5" class="section level3">
-<h3>Training with 5 med sessions</h3>
+<div id="training-with-3-med-session-4" class="section level3">
+<h3>Training with 3 med session</h3>
+<pre><code>##   cut_off correct_med_pred med_session
+## 1    0.50                5           6
+## 2    0.55                5           6
+## 3    0.60                5           6
+## 4    0.65                5           6
+## 5    0.70                4           6
+## 6    0.75                4           6</code></pre>
+<pre><code>##                 Reference
+## Prediction       Med Taking Not Med Taking
+##   Med Taking           4650            905
+##   Not Med Taking       1198             49</code></pre>
+<pre><code>##  Accuracy 
+## 0.6908262</code></pre>
+<pre><code>## Sensitivity Specificity  Youden&#39;s J 
+##  0.79514364  0.05136268 -0.15349368</code></pre>
+</div>
+<div id="training-with-4-med-sessions-5" class="section level3">
+<h3>Training with 4 med sessions</h3>
 <pre><code>##   cut_off correct_med_pred med_session
 ## 1    0.50                6           6
 ## 2    0.55                6           6
 ## 3    0.60                6           6
 ## 4    0.65                6           6
 ## 5    0.70                6           6
-## 6    0.75                6           6
-## 7    0.80                6           6
-## 8    0.85                6           6
-## 9    0.90                6           6</code></pre>
+## 6    0.75                6           6</code></pre>
 <pre><code>##                 Reference
 ## Prediction       Med Taking Not Med Taking
 ##   Med Taking           5848            954
@@ -524,8 +596,8 @@ pre code {
 <pre><code>## Sensitivity Specificity  Youden&#39;s J 
 ##           1           0           0</code></pre>
 </div>
-<div id="training-with-4-med-sessions-5" class="section level3">
-<h3>Training with 4 med sessions</h3>
+<div id="training-with-5-med-sessions-5" class="section level3">
+<h3>Training with 5 med sessions</h3>
 <pre><code>##   cut_off correct_med_pred med_session
 ## 1    0.50                6           6
 ## 2    0.55                6           6
@@ -556,10 +628,7 @@ pre code {
 ## 3    0.60                6           6
 ## 4    0.65                6           6
 ## 5    0.70                6           6
-## 6    0.75                6           6
-## 7    0.80                6           6
-## 8    0.85                4           6
-## 9    0.90                4           6</code></pre>
+## 6    0.75                6           6</code></pre>
 <pre><code>##                 Reference
 ## Prediction       Med Taking Not Med Taking
 ##   Med Taking           7354              5
@@ -569,18 +638,33 @@ pre code {
 <pre><code>## Sensitivity Specificity  Youden&#39;s J 
 ##   1.0000000   0.9956672   0.9956672</code></pre>
 </div>
-<div id="training-with-5-med-sessions-6" class="section level3">
-<h3>Training with 5 med sessions</h3>
+<div id="training-with-3-med-session-5" class="section level3">
+<h3>Training with 3 med session</h3>
 <pre><code>##   cut_off correct_med_pred med_session
 ## 1    0.50                6           6
 ## 2    0.55                6           6
 ## 3    0.60                6           6
 ## 4    0.65                6           6
 ## 5    0.70                6           6
-## 6    0.75                6           6
-## 7    0.80                6           6
-## 8    0.85                5           6
-## 9    0.90                4           6</code></pre>
+## 6    0.75                6           6</code></pre>
+<pre><code>##                 Reference
+## Prediction       Med Taking Not Med Taking
+##   Med Taking           7354            159
+##   Not Med Taking          0            995</code></pre>
+<pre><code>##  Accuracy 
+## 0.9813117</code></pre>
+<pre><code>## Sensitivity Specificity  Youden&#39;s J 
+##   1.0000000   0.8622184   0.8622184</code></pre>
+</div>
+<div id="training-with-4-med-sessions-6" class="section level3">
+<h3>Training with 4 med sessions</h3>
+<pre><code>##   cut_off correct_med_pred med_session
+## 1    0.50                6           6
+## 2    0.55                6           6
+## 3    0.60                6           6
+## 4    0.65                6           6
+## 5    0.70                6           6
+## 6    0.75                6           6</code></pre>
 <pre><code>##                 Reference
 ## Prediction       Med Taking Not Med Taking
 ##   Med Taking           7354           1154
@@ -590,8 +674,8 @@ pre code {
 <pre><code>## Sensitivity Specificity  Youden&#39;s J 
 ##           1           0           0</code></pre>
 </div>
-<div id="training-with-4-med-sessions-6" class="section level3">
-<h3>Training with 4 med sessions</h3>
+<div id="training-with-5-med-sessions-6" class="section level3">
+<h3>Training with 5 med sessions</h3>
 <pre><code>##   cut_off correct_med_pred med_session
 ## 1    0.50                6           6
 ## 2    0.55                6           6
@@ -622,10 +706,7 @@ pre code {
 ## 3    0.60                6           6
 ## 4    0.65                6           6
 ## 5    0.70                6           6
-## 6    0.75                6           6
-## 7    0.80                5           6
-## 8    0.85                4           6
-## 9    0.90                4           6</code></pre>
+## 6    0.75                6           6</code></pre>
 <pre><code>##                 Reference
 ## Prediction       Med Taking Not Med Taking
 ##   Med Taking           7859              0
@@ -635,18 +716,33 @@ pre code {
 <pre><code>## Sensitivity Specificity  Youden&#39;s J 
 ##    0.969768    1.000000    0.969768</code></pre>
 </div>
-<div id="training-with-5-med-sessions-7" class="section level3">
-<h3>Training with 5 med sessions</h3>
+<div id="training-with-3-med-session-6" class="section level3">
+<h3>Training with 3 med session</h3>
 <pre><code>##   cut_off correct_med_pred med_session
 ## 1    0.50                6           6
 ## 2    0.55                6           6
 ## 3    0.60                6           6
 ## 4    0.65                6           6
 ## 5    0.70                6           6
-## 6    0.75                6           6
-## 7    0.80                5           6
-## 8    0.85                5           6
-## 9    0.90                5           6</code></pre>
+## 6    0.75                6           6</code></pre>
+<pre><code>##                 Reference
+## Prediction       Med Taking Not Med Taking
+##   Med Taking           8033            708
+##   Not Med Taking         71            640</code></pre>
+<pre><code>##  Accuracy 
+## 0.9175836</code></pre>
+<pre><code>## Sensitivity Specificity  Youden&#39;s J 
+##   0.9912389   0.4747774   0.4660163</code></pre>
+</div>
+<div id="training-with-4-med-sessions-7" class="section level3">
+<h3>Training with 4 med sessions</h3>
+<pre><code>##   cut_off correct_med_pred med_session
+## 1    0.50                6           6
+## 2    0.55                6           6
+## 3    0.60                6           6
+## 4    0.65                6           6
+## 5    0.70                6           6
+## 6    0.75                6           6</code></pre>
 <pre><code>##                 Reference
 ## Prediction       Med Taking Not Med Taking
 ##   Med Taking           8104           1348
@@ -656,8 +752,8 @@ pre code {
 <pre><code>## Sensitivity Specificity  Youden&#39;s J 
 ##           1           0           0</code></pre>
 </div>
-<div id="training-with-4-med-sessions-7" class="section level3">
-<h3>Training with 4 med sessions</h3>
+<div id="training-with-5-med-sessions-7" class="section level3">
+<h3>Training with 5 med sessions</h3>
 <pre><code>##   cut_off correct_med_pred med_session
 ## 1    0.50                6           6
 ## 2    0.55                6           6
@@ -688,10 +784,7 @@ pre code {
 ## 3    0.60                4           6
 ## 4    0.65                4           6
 ## 5    0.70                3           6
-## 6    0.75                2           6
-## 7    0.80                2           6
-## 8    0.85                1           6
-## 9    0.90                1           6</code></pre>
+## 6    0.75                2           6</code></pre>
 <pre><code>##                 Reference
 ## Prediction       Med Taking Not Med Taking
 ##   Med Taking           4236            399
@@ -701,18 +794,33 @@ pre code {
 <pre><code>## Sensitivity Specificity  Youden&#39;s J 
 ##   0.7891207   0.5571587   0.3462794</code></pre>
 </div>
-<div id="training-with-5-med-sessions-8" class="section level3">
-<h3>Training with 5 med sessions</h3>
+<div id="training-with-3-med-session-7" class="section level3">
+<h3>Training with 3 med session</h3>
 <pre><code>##   cut_off correct_med_pred med_session
 ## 1    0.50                6           6
 ## 2    0.55                6           6
 ## 3    0.60                6           6
 ## 4    0.65                5           6
 ## 5    0.70                5           6
-## 6    0.75                5           6
-## 7    0.80                5           6
-## 8    0.85                4           6
-## 9    0.90                4           6</code></pre>
+## 6    0.75                4           6</code></pre>
+<pre><code>##                 Reference
+## Prediction       Med Taking Not Med Taking
+##   Med Taking           5233            747
+##   Not Med Taking        135            154</code></pre>
+<pre><code>##  Accuracy 
+## 0.8593077</code></pre>
+<pre><code>## Sensitivity Specificity  Youden&#39;s J 
+##   0.9748510   0.1709212   0.1457722</code></pre>
+</div>
+<div id="training-with-4-med-sessions-8" class="section level3">
+<h3>Training with 4 med sessions</h3>
+<pre><code>##   cut_off correct_med_pred med_session
+## 1    0.50                6           6
+## 2    0.55                6           6
+## 3    0.60                6           6
+## 4    0.65                5           6
+## 5    0.70                5           6
+## 6    0.75                5           6</code></pre>
 <pre><code>##                 Reference
 ## Prediction       Med Taking Not Med Taking
 ##   Med Taking           5368            901
@@ -722,8 +830,8 @@ pre code {
 <pre><code>## Sensitivity Specificity  Youden&#39;s J 
 ##           1           0           0</code></pre>
 </div>
-<div id="training-with-4-med-sessions-8" class="section level3">
-<h3>Training with 4 med sessions</h3>
+<div id="training-with-5-med-sessions-8" class="section level3">
+<h3>Training with 5 med sessions</h3>
 <pre><code>##   cut_off correct_med_pred med_session
 ## 1    0.50                6           6
 ## 2    0.55                6           6
@@ -754,10 +862,7 @@ pre code {
 ## 3    0.60                6           6
 ## 4    0.65                6           6
 ## 5    0.70                6           6
-## 6    0.75                5           6
-## 7    0.80                3           6
-## 8    0.85                3           6
-## 9    0.90                3           6</code></pre>
+## 6    0.75                5           6</code></pre>
 <pre><code>##                 Reference
 ## Prediction       Med Taking Not Med Taking
 ##   Med Taking           4848            834
@@ -767,18 +872,33 @@ pre code {
 <pre><code>## Sensitivity Specificity  Youden&#39;s J 
 ##   0.8396259   0.4440000   0.2836259</code></pre>
 </div>
-<div id="training-with-5-med-sessions-9" class="section level3">
-<h3>Training with 5 med sessions</h3>
+<div id="training-with-3-med-session-8" class="section level3">
+<h3>Training with 3 med session</h3>
 <pre><code>##   cut_off correct_med_pred med_session
 ## 1    0.50                6           6
 ## 2    0.55                6           6
 ## 3    0.60                6           6
 ## 4    0.65                6           6
 ## 5    0.70                6           6
-## 6    0.75                6           6
-## 7    0.80                6           6
-## 8    0.85                6           6
-## 9    0.90                6           6</code></pre>
+## 6    0.75                6           6</code></pre>
+<pre><code>##                 Reference
+## Prediction       Med Taking Not Med Taking
+##   Med Taking           5645           1235
+##   Not Med Taking        129            265</code></pre>
+<pre><code>##  Accuracy 
+## 0.8124828</code></pre>
+<pre><code>## Sensitivity Specificity  Youden&#39;s J 
+##   0.9776585   0.1766667   0.1543251</code></pre>
+</div>
+<div id="training-with-4-med-sessions-9" class="section level3">
+<h3>Training with 4 med sessions</h3>
+<pre><code>##   cut_off correct_med_pred med_session
+## 1    0.50                6           6
+## 2    0.55                6           6
+## 3    0.60                6           6
+## 4    0.65                6           6
+## 5    0.70                6           6
+## 6    0.75                6           6</code></pre>
 <pre><code>##                 Reference
 ## Prediction       Med Taking Not Med Taking
 ##   Med Taking           5774           1500
@@ -788,8 +908,8 @@ pre code {
 <pre><code>## Sensitivity Specificity  Youden&#39;s J 
 ##           1           0           0</code></pre>
 </div>
-<div id="training-with-4-med-sessions-9" class="section level3">
-<h3>Training with 4 med sessions</h3>
+<div id="training-with-5-med-sessions-9" class="section level3">
+<h3>Training with 5 med sessions</h3>
 <pre><code>##   cut_off correct_med_pred med_session
 ## 1    0.50                6           6
 ## 2    0.55                6           6
@@ -818,12 +938,9 @@ pre code {
 ## 1    0.50                6           6
 ## 2    0.55                6           6
 ## 3    0.60                6           6
-## 4    0.65                6           6
+## 4    0.65                5           6
 ## 5    0.70                4           6
-## 6    0.75                4           6
-## 7    0.80                3           6
-## 8    0.85                1           6
-## 9    0.90                1           6</code></pre>
+## 6    0.75                4           6</code></pre>
 <pre><code>##                 Reference
 ## Prediction       Med Taking Not Med Taking
 ##   Med Taking           6554            840
@@ -833,18 +950,33 @@ pre code {
 <pre><code>## Sensitivity Specificity  Youden&#39;s J 
 ##   0.8153770   0.4713656   0.2867426</code></pre>
 </div>
-<div id="training-with-5-med-sessions-10" class="section level3">
-<h3>Training with 5 med sessions</h3>
+<div id="training-with-3-med-session-9" class="section level3">
+<h3>Training with 3 med session</h3>
 <pre><code>##   cut_off correct_med_pred med_session
 ## 1    0.50                6           6
 ## 2    0.55                6           6
 ## 3    0.60                6           6
 ## 4    0.65                6           6
 ## 5    0.70                6           6
-## 6    0.75                6           6
-## 7    0.80                5           6
-## 8    0.85                5           6
-## 9    0.90                5           6</code></pre>
+## 6    0.75                6           6</code></pre>
+<pre><code>##                 Reference
+## Prediction       Med Taking Not Med Taking
+##   Med Taking           7861           1359
+##   Not Med Taking        177            230</code></pre>
+<pre><code>##  Accuracy 
+## 0.8404487</code></pre>
+<pre><code>## Sensitivity Specificity  Youden&#39;s J 
+##   0.9779796   0.1447451   0.1227247</code></pre>
+</div>
+<div id="training-with-4-med-sessions-10" class="section level3">
+<h3>Training with 4 med sessions</h3>
+<pre><code>##   cut_off correct_med_pred med_session
+## 1    0.50                6           6
+## 2    0.55                6           6
+## 3    0.60                6           6
+## 4    0.65                6           6
+## 5    0.70                6           6
+## 6    0.75                6           6</code></pre>
 <pre><code>##                 Reference
 ## Prediction       Med Taking Not Med Taking
 ##   Med Taking           8038           1589
@@ -854,8 +986,8 @@ pre code {
 <pre><code>## Sensitivity Specificity  Youden&#39;s J 
 ##           1           0           0</code></pre>
 </div>
-<div id="training-with-4-med-sessions-10" class="section level3">
-<h3>Training with 4 med sessions</h3>
+<div id="training-with-5-med-sessions-10" class="section level3">
+<h3>Training with 5 med sessions</h3>
 <pre><code>##   cut_off correct_med_pred med_session
 ## 1    0.50                6           6
 ## 2    0.55                6           6
