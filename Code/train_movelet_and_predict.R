@@ -1,7 +1,7 @@
 # Train and run prediction on patient
 
 setwd(rprojroot::find_rstudio_root_file()) 
-source("Code/functions.R")
+source("Code/functions-1.R")
 library(dplyr)
 library(caret)
 
@@ -13,6 +13,7 @@ dat <- readRDS(data.path)
 pca.dat <- run_pca(dat)
 
 mode = args[2]
+
 if(mode == "1_ses_train"){
   train.label <- c("6._Med_Taking",
                    #"9._Med_Taking",
@@ -21,7 +22,7 @@ if(mode == "1_ses_train"){
                    "Look_around_in_bag_or_purse")
   
   test.dat <- subset(pca.dat, ActivityName %in% c("Turn_Key","Open_Door","Eat_From_Bag","4._Med_Taking","5._Med_Taking","7._Med_Taking","8._Med_Taking",
-                                                  "10._Med_Taking","11._Med_Taking", "13._Med_Taking", "14._Med_Taking"))
+                                                  "10._Med_Taking","11._Med_Taking", "13._Med_Taking", "14._Med_Taking", "15._Med_Taking"))
 }else if(mode == "5_ses_train"){
   train.label <- c("3._Patient_Choice",
                    "6._Med_Taking",
@@ -45,9 +46,18 @@ if(mode == "1_ses_train"){
                    "Look_around_in_bag_or_purse")
   
   test.dat <- subset(pca.dat, ActivityName %in% c("Turn_Key","Open_Door","Eat_From_Bag","4._Med_Taking","5._Med_Taking","7._Med_Taking","8._Med_Taking",
-                                                  "10._Med_Taking","11._Med_Taking", "13._Med_Taking", "14._Med_Taking"))
+                                                  "10._Med_Taking","11._Med_Taking", "13._Med_Taking", "14._Med_Taking", "15._Med_Taking"))
+} else if(mode == "3_ses_train"){
+  train.label <- c("6._Med_Taking",
+                   "9._Med_Taking",
+                   "12._Med_Taking",
+                   "Walk",
+                   "Wash_Hands",
+                   "Look_around_in_bag_or_purse")
+  
+  test.dat <- subset(pca.dat, ActivityName %in% c("Turn_Key","Open_Door","Eat_From_Bag","4._Med_Taking","5._Med_Taking","7._Med_Taking","8._Med_Taking",
+                                                  "10._Med_Taking","11._Med_Taking", "13._Med_Taking", "14._Med_Taking", "15._Med_Taking"))
 }
-
 
 ## create movelet-ready data 
 movelet.dat <- Acceleration_Create2(pca.dat,subjectName= dat$PatientID[1],

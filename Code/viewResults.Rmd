@@ -70,16 +70,24 @@ show_overall_metrics = function(resPreds){
 resPreds = patients %>% lapply(function(x) loadPrediction(patient = x[1], mode = "1_ses_train"))
 show_overall_metrics(resPreds)
 ```
-### Training with 5 med sessions
+### Training with 3 med sessions
 
 ```{r}
-resPreds = patients %>% lapply(function(x) loadPrediction(patient = x[1], mode = "5_ses_train"))
+resPreds = patients %>% lapply(function(x) loadPrediction(patient = x[1], mode = "3_ses_train"))
 show_overall_metrics(resPreds)
 ```
+
 ### Training with 4 med sessions
 
 ```{r}
 resPreds = patients %>% lapply(function(x) loadPrediction(patient = x[1], mode = "4_ses_train"))
+show_overall_metrics(resPreds)
+```
+
+### Training with 5 med sessions
+
+```{r}
+resPreds = patients %>% lapply(function(x) loadPrediction(patient = x[1], mode = "5_ses_train"))
 show_overall_metrics(resPreds)
 ```
 
@@ -94,20 +102,30 @@ pred$test$Accuracy$table
 pred$test$Accuracy$overall[1]
 get_metrics(pred$test$Accuracy$table)
 ```
-
-### Training with 5 med sessions
+### Training with 3 med session
 
 ```{r}
-pred = loadPrediction(19, "5_ses_train")
+pred = loadPrediction(19, "3_ses_train")
 pred$test$Session
 pred$test$Accuracy$table
 pred$test$Accuracy$overall[1]
 get_metrics(pred$test$Accuracy$table)
 ```
+
 ### Training with 4 med sessions
 
 ```{r}
 pred = loadPrediction(19, "4_ses_train")
+pred$test$Session
+pred$test$Accuracy$table
+pred$test$Accuracy$overall[1]
+get_metrics(pred$test$Accuracy$table)
+```
+
+### Training with 5 med sessions
+
+```{r}
+pred = loadPrediction(19, "5_ses_train")
 pred$test$Session
 pred$test$Accuracy$table
 pred$test$Accuracy$overall[1]
@@ -126,10 +144,10 @@ pred$test$Accuracy$overall[1]
 get_metrics(pred$test$Accuracy$table)
 ```
 
-### Training with 5 med sessions
+### Training with 3 med session
 
 ```{r}
-pred = loadPrediction(20, "5_ses_train")
+pred = loadPrediction(20, "3_ses_train")
 pred$test$Session
 pred$test$Accuracy$table
 pred$test$Accuracy$overall[1]
@@ -145,6 +163,17 @@ pred$test$Accuracy$table
 pred$test$Accuracy$overall[1]
 get_metrics(pred$test$Accuracy$table)
 ```
+
+### Training with 5 med sessions
+
+```{r}
+pred = loadPrediction(20, "5_ses_train")
+pred$test$Session
+pred$test$Accuracy$table
+pred$test$Accuracy$overall[1]
+get_metrics(pred$test$Accuracy$table)
+```
+
 ## Patient 28 
 
 ### Training with 1 med session
@@ -157,10 +186,10 @@ pred$test$Accuracy$overall[1]
 get_metrics(pred$test$Accuracy$table)
 ```
 
-### Training with 5 med sessions
+### Training with 3 med session
 
 ```{r}
-pred = loadPrediction(28, "5_ses_train")
+pred = loadPrediction(28, "3_ses_train")
 pred$test$Session
 pred$test$Accuracy$table
 pred$test$Accuracy$overall[1]
@@ -171,6 +200,16 @@ get_metrics(pred$test$Accuracy$table)
 
 ```{r}
 pred = loadPrediction(28, "4_ses_train")
+pred$test$Session
+pred$test$Accuracy$table
+pred$test$Accuracy$overall[1]
+get_metrics(pred$test$Accuracy$table)
+```
+
+### Training with 5 med sessions
+
+```{r}
+pred = loadPrediction(28, "5_ses_train")
 pred$test$Session
 pred$test$Accuracy$table
 pred$test$Accuracy$overall[1]
@@ -189,10 +228,10 @@ pred$test$Accuracy$overall[1]
 get_metrics(pred$test$Accuracy$table)
 ```
 
-### Training with 5 med sessions
+### Training with 3 med session
 
 ```{r}
-pred = loadPrediction(32, "5_ses_train")
+pred = loadPrediction(32, "3_ses_train")
 pred$test$Session
 pred$test$Accuracy$table
 pred$test$Accuracy$overall[1]
@@ -203,6 +242,16 @@ get_metrics(pred$test$Accuracy$table)
 
 ```{r}
 pred = loadPrediction(32, "4_ses_train")
+pred$test$Session
+pred$test$Accuracy$table
+pred$test$Accuracy$overall[1]
+get_metrics(pred$test$Accuracy$table)
+```
+
+### Training with 5 med sessions
+
+```{r}
+pred = loadPrediction(32, "5_ses_train")
 pred$test$Session
 pred$test$Accuracy$table
 pred$test$Accuracy$overall[1]
@@ -220,10 +269,10 @@ pred$test$Accuracy$overall[1]
 get_metrics(pred$test$Accuracy$table)
 ```
 
-### Training with 5 med sessions
+### Training with 3 med session
 
 ```{r}
-pred = loadPrediction(40, "5_ses_train")
+pred = loadPrediction(40, "3_ses_train")
 pred$test$Session
 pred$test$Accuracy$table
 pred$test$Accuracy$overall[1]
@@ -234,6 +283,16 @@ get_metrics(pred$test$Accuracy$table)
 
 ```{r}
 pred = loadPrediction(40, "4_ses_train")
+pred$test$Session
+pred$test$Accuracy$table
+pred$test$Accuracy$overall[1]
+get_metrics(pred$test$Accuracy$table)
+```
+
+### Training with 5 med sessions
+
+```{r}
+pred = loadPrediction(40, "5_ses_train")
 pred$test$Session
 pred$test$Accuracy$table
 pred$test$Accuracy$overall[1]
@@ -251,10 +310,10 @@ pred$test$Accuracy$overall[1]
 get_metrics(pred$test$Accuracy$table)
 ```
 
-### Training with 5 med sessions
+### Training with 3 med session
 
 ```{r}
-pred = loadPrediction(52, "5_ses_train")
+pred = loadPrediction(52, "3_ses_train")
 pred$test$Session
 pred$test$Accuracy$table
 pred$test$Accuracy$overall[1]
@@ -265,6 +324,16 @@ get_metrics(pred$test$Accuracy$table)
 
 ```{r}
 pred = loadPrediction(52, "4_ses_train")
+pred$test$Session
+pred$test$Accuracy$table
+pred$test$Accuracy$overall[1]
+get_metrics(pred$test$Accuracy$table)
+```
+
+### Training with 5 med sessions
+
+```{r}
+pred = loadPrediction(52, "5_ses_train")
 pred$test$Session
 pred$test$Accuracy$table
 pred$test$Accuracy$overall[1]
@@ -282,10 +351,10 @@ pred$test$Accuracy$overall[1]
 get_metrics(pred$test$Accuracy$table)
 ```
 
-### Training with 5 med sessions
+### Training with 3 med session
 
 ```{r}
-pred = loadPrediction(75, "5_ses_train")
+pred = loadPrediction(75, "3_ses_train")
 pred$test$Session
 pred$test$Accuracy$table
 pred$test$Accuracy$overall[1]
@@ -296,6 +365,16 @@ get_metrics(pred$test$Accuracy$table)
 
 ```{r}
 pred = loadPrediction(75, "4_ses_train")
+pred$test$Session
+pred$test$Accuracy$table
+pred$test$Accuracy$overall[1]
+get_metrics(pred$test$Accuracy$table)
+```
+
+### Training with 5 med sessions
+
+```{r}
+pred = loadPrediction(75, "5_ses_train")
 pred$test$Session
 pred$test$Accuracy$table
 pred$test$Accuracy$overall[1]
@@ -313,10 +392,10 @@ pred$test$Accuracy$overall[1]
 get_metrics(pred$test$Accuracy$table)
 ```
 
-### Training with 5 med sessions
+### Training with 3 med session
 
 ```{r}
-pred = loadPrediction(86, "5_ses_train")
+pred = loadPrediction(86, "3_ses_train")
 pred$test$Session
 pred$test$Accuracy$table
 pred$test$Accuracy$overall[1]
@@ -327,6 +406,16 @@ get_metrics(pred$test$Accuracy$table)
 
 ```{r}
 pred = loadPrediction(86, "4_ses_train")
+pred$test$Session
+pred$test$Accuracy$table
+pred$test$Accuracy$overall[1]
+get_metrics(pred$test$Accuracy$table)
+```
+
+### Training with 5 med sessions
+
+```{r}
+pred = loadPrediction(86, "5_ses_train")
 pred$test$Session
 pred$test$Accuracy$table
 pred$test$Accuracy$overall[1]
@@ -344,10 +433,10 @@ pred$test$Accuracy$overall[1]
 get_metrics(pred$test$Accuracy$table)
 ```
 
-### Training with 5 med sessions
+### Training with 3 med session
 
 ```{r}
-pred = loadPrediction(88, "5_ses_train")
+pred = loadPrediction(88, "3_ses_train")
 pred$test$Session
 pred$test$Accuracy$table
 pred$test$Accuracy$overall[1]
@@ -358,6 +447,16 @@ get_metrics(pred$test$Accuracy$table)
 
 ```{r}
 pred = loadPrediction(88, "4_ses_train")
+pred$test$Session
+pred$test$Accuracy$table
+pred$test$Accuracy$overall[1]
+get_metrics(pred$test$Accuracy$table)
+```
+
+### Training with 5 med sessions
+
+```{r}
+pred = loadPrediction(88, "5_ses_train")
 pred$test$Session
 pred$test$Accuracy$table
 pred$test$Accuracy$overall[1]
@@ -375,10 +474,10 @@ pred$test$Accuracy$overall[1]
 get_metrics(pred$test$Accuracy$table)
 ```
 
-### Training with 5 med sessions
+### Training with 3 med session
 
 ```{r}
-pred = loadPrediction(89, "5_ses_train")
+pred = loadPrediction(89, "3_ses_train")
 pred$test$Session
 pred$test$Accuracy$table
 pred$test$Accuracy$overall[1]
@@ -394,3 +493,15 @@ pred$test$Accuracy$table
 pred$test$Accuracy$overall[1]
 get_metrics(pred$test$Accuracy$table)
 ```
+
+### Training with 5 med sessions
+
+```{r}
+pred = loadPrediction(89, "5_ses_train")
+pred$test$Session
+pred$test$Accuracy$table
+pred$test$Accuracy$overall[1]
+get_metrics(pred$test$Accuracy$table)
+```
+
+
