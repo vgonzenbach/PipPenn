@@ -9,7 +9,7 @@ output:
      theme: united
 ---
 
-```{r setup, echo=FALSE}
+```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = FALSE, fig.align = "center",
                       message = FALSE, warning = FALSE,
                       fig.width = 10)
@@ -25,14 +25,15 @@ source("Code/functions.R")
 
 1. Training on 1 med taking session (i.e. session 6) + Wash Hands, Look Around Purse as Control Activities. 
 1. Training on 1 med taking session (i.e. session 6) + Wash Hands, Look Around Purse, and Walk as Control Activities. 
-1. Training on 3 med taking session (i.e. sessions 6, 9, 12) + Wash Hands, Look Around Purse and Walk as Control Activities.
-1. Training on 4 med taking session (i.e. session 3, 6, 9, 12) + Wash Hands, Look Around Purse and Walk as Control Activities.
+1. Training on 2 med taking sessions (i.e. session 6, 9) + Wash Hands, Look Around Purse, and Walk as Control Activities. 
+1. Training on 3 med taking sessions (i.e. sessions 6, 9, 12) + Wash Hands, Look Around Purse and Walk as Control Activities.
+1. Training on 4 med taking sessions (i.e. session 3, 6, 9, 12) + Wash Hands, Look Around Purse and Walk as Control Activities.
 
 All modes were tested on the same set of activities, namely: `r knitr::combine_words(c("Turn_Key","Open_Door","Eat_From_Bag","4._Med_Taking","5._Med_Taking","7._Med_Taking","8._Med_Taking","10._Med_Taking","11._Med_Taking", "13._Med_Taking", "14._Med_Taking", "15._Med_Taking"))`.
 
 ```{r, echo=FALSE}
 loadPrediction = function(patient, mode){
-  path = list.files(path="Results", pattern = sprintf("patient_%s_pred_%s", patient, mode)) 
+  path = list.files(path="Results", pattern = sprintf("patient_%s_pred_%s.rds", as.character(patient), mode)) 
   resPred = readRDS(sprintf("Results/%s", path))
   return(resPred)
 }
@@ -70,7 +71,10 @@ show_overall_metrics = function(resPreds){
   print(accuracy)
   print(get_metrics(table))
 }
+```
 
+
+```{r}
 resPreds = patients %>% lapply(function(x) loadPrediction(patient = x[1], mode = "1_ses_train"))
 show_overall_metrics(resPreds)
 ```
@@ -79,6 +83,13 @@ show_overall_metrics(resPreds)
 
 ```{r}
 resPreds = patients %>% lapply(function(x) loadPrediction(patient = x[1], mode = "1_ses_train_walk"))
+show_overall_metrics(resPreds)
+```
+
+### Training with 2 med sessions
+
+```{r}
+resPreds = patients %>% lapply(function(x) loadPrediction(patient = x[1], mode = "2_ses_train"))
 show_overall_metrics(resPreds)
 ```
 
@@ -118,6 +129,15 @@ pred$test$Accuracy$overall[1]
 get_metrics(pred$test$Accuracy$table)
 ```
 
+### Training with 2 med session
+
+```{r}
+pred = loadPrediction(19, "2_ses_train")
+pred$test$Session
+pred$test$Accuracy$table
+pred$test$Accuracy$overall[1]
+get_metrics(pred$test$Accuracy$table)
+```
 
 ### Training with 3 med session
 
@@ -155,6 +175,16 @@ get_metrics(pred$test$Accuracy$table)
 
 ```{r}
 pred = loadPrediction(20, "1_ses_train_walk")
+pred$test$Session
+pred$test$Accuracy$table
+pred$test$Accuracy$overall[1]
+get_metrics(pred$test$Accuracy$table)
+```
+
+### Training with 2 med session
+
+```{r}
+pred = loadPrediction(20, "2_ses_train")
 pred$test$Session
 pred$test$Accuracy$table
 pred$test$Accuracy$overall[1]
@@ -203,6 +233,16 @@ pred$test$Accuracy$overall[1]
 get_metrics(pred$test$Accuracy$table)
 ```
 
+### Training with 2 med session
+
+```{r}
+pred = loadPrediction(28, "2_ses_train")
+pred$test$Session
+pred$test$Accuracy$table
+pred$test$Accuracy$overall[1]
+get_metrics(pred$test$Accuracy$table)
+```
+
 ### Training with 3 med session
 
 ```{r}
@@ -239,6 +279,16 @@ get_metrics(pred$test$Accuracy$table)
 
 ```{r}
 pred = loadPrediction(32, "1_ses_train_walk")
+pred$test$Session
+pred$test$Accuracy$table
+pred$test$Accuracy$overall[1]
+get_metrics(pred$test$Accuracy$table)
+```
+
+### Training with 2 med session
+
+```{r}
+pred = loadPrediction(32, "2_ses_train")
 pred$test$Session
 pred$test$Accuracy$table
 pred$test$Accuracy$overall[1]
@@ -286,6 +336,16 @@ pred$test$Accuracy$overall[1]
 get_metrics(pred$test$Accuracy$table)
 ```
 
+### Training with 2 med session
+
+```{r}
+pred = loadPrediction(40, "2_ses_train")
+pred$test$Session
+pred$test$Accuracy$table
+pred$test$Accuracy$overall[1]
+get_metrics(pred$test$Accuracy$table)
+```
+
 ### Training with 3 med session
 
 ```{r}
@@ -321,6 +381,16 @@ get_metrics(pred$test$Accuracy$table)
 
 ```{r}
 pred = loadPrediction(52, "1_ses_train_walk")
+pred$test$Session
+pred$test$Accuracy$table
+pred$test$Accuracy$overall[1]
+get_metrics(pred$test$Accuracy$table)
+```
+
+### Training with 2 med session
+
+```{r}
+pred = loadPrediction(52, "2_ses_train")
 pred$test$Session
 pred$test$Accuracy$table
 pred$test$Accuracy$overall[1]
@@ -368,6 +438,16 @@ pred$test$Accuracy$overall[1]
 get_metrics(pred$test$Accuracy$table)
 ```
 
+### Training with 2 med session
+
+```{r}
+pred = loadPrediction(75, "2_ses_train")
+pred$test$Session
+pred$test$Accuracy$table
+pred$test$Accuracy$overall[1]
+get_metrics(pred$test$Accuracy$table)
+```
+
 ### Training with 3 med session
 
 ```{r}
@@ -403,6 +483,16 @@ get_metrics(pred$test$Accuracy$table)
 
 ```{r}
 pred = loadPrediction(86, "1_ses_train_walk")
+pred$test$Session
+pred$test$Accuracy$table
+pred$test$Accuracy$overall[1]
+get_metrics(pred$test$Accuracy$table)
+```
+
+### Training with 2 med session
+
+```{r}
+pred = loadPrediction(86, "2_ses_train")
 pred$test$Session
 pred$test$Accuracy$table
 pred$test$Accuracy$overall[1]
@@ -450,6 +540,16 @@ pred$test$Accuracy$overall[1]
 get_metrics(pred$test$Accuracy$table)
 ```
 
+### Training with 2 med session
+
+```{r}
+pred = loadPrediction(88, "2_ses_train")
+pred$test$Session
+pred$test$Accuracy$table
+pred$test$Accuracy$overall[1]
+get_metrics(pred$test$Accuracy$table)
+```
+
 ### Training with 3 med session
 
 ```{r}
@@ -485,6 +585,16 @@ get_metrics(pred$test$Accuracy$table)
 
 ```{r}
 pred = loadPrediction(89, "1_ses_train_walk")
+pred$test$Session
+pred$test$Accuracy$table
+pred$test$Accuracy$overall[1]
+get_metrics(pred$test$Accuracy$table)
+```
+
+### Training with 2 med session
+
+```{r}
+pred = loadPrediction(89, "2_ses_train")
 pred$test$Session
 pred$test$Accuracy$table
 pred$test$Accuracy$overall[1]
