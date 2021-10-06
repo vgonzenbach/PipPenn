@@ -96,6 +96,54 @@ resPreds = pairs %>% apply(1, function(x) loadPrediction(patient = x["Var1"], se
 med_pred = show_overall_metrics(resPreds)
 med_pred %>% mutate(percent_correct = correct_med_pred / med_session)
 ```
+## Med Taking Session 5
+
+```{r}
+pred = patients %>% lapply(function(x) loadPrediction(x, ses = 5))
+med_pred = show_overall_metrics(pred)
+med_pred %>% mutate(percent_correct = correct_med_pred / med_session)
+```
+
+## Med Taking Session 6
+
+```{r}
+pred = patients %>% lapply(function(x) loadPrediction(x, ses = 6))
+med_pred = show_overall_metrics(pred)
+med_pred %>% mutate(percent_correct = correct_med_pred / med_session)
+```
+
+## Med Taking Session 8
+
+```{r}
+pred = patients %>% lapply(function(x) loadPrediction(x, ses = 8))
+med_pred = show_overall_metrics(pred)
+med_pred %>% mutate(percent_correct = correct_med_pred / med_session)
+```
+
+## Med Taking Session 9
+
+```{r}
+pred = patients %>% lapply(function(x) loadPrediction(x, ses = 9))
+med_pred = show_overall_metrics(pred)
+med_pred %>% mutate(percent_correct = correct_med_pred / med_session)
+```
+
+## Med Taking Session 11
+
+```{r}
+pred = patients %>% lapply(function(x) loadPrediction(x, ses = 11))
+med_pred = show_overall_metrics(pred)
+med_pred %>% mutate(percent_correct = correct_med_pred / med_session)
+```
+
+## Med Taking Session 12
+
+```{r}
+pred = patients %>% lapply(function(x) loadPrediction(x, ses = 12))
+med_pred = show_overall_metrics(pred)
+med_pred %>% mutate(percent_correct = correct_med_pred / med_session)
+```
+
 
 ## Patient 19
 
