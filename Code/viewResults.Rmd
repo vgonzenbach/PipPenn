@@ -1,5 +1,5 @@
 ---
-title: "view_predictions"
+title: "Movelet Prediction Results"
 author: "Virgilio Gonzenbach"
 date: "9/28/2021"
 output: 
@@ -14,40 +14,74 @@ knitr::opts_chunk$set(echo = FALSE, fig.align = "center",
                       message = FALSE, warning = FALSE,
                       fig.width = 10)
 knitr::opts_knit$set(root.dir = rprojroot::find_rstudio_root_file())
-
-library(dplyr)
-source("Code/functions.R")
 ```
 
 # Movelet Predictions
 
-3 Training Modes are shown:  
+Results are shown for training with one med session for sessions (5 6 8 9 11 12) + Wash Hands, Look Around Purse, and Walk_train as Control Activities. 
 
-1. Training on 1 med taking session (i.e. session 6) + Wash Hands, Look Around Purse as Control Activities. 
-1. Training on 1 med taking session (i.e. session 6) + Wash Hands, Look Around Purse, and Walk as Control Activities. 
-1. Training on 2 med taking sessions (i.e. session 6, 9) + Wash Hands, Look Around Purse, and Walk as Control Activities. 
-1. Training on 3 med taking sessions (i.e. sessions 6, 9, 12) + Wash Hands, Look Around Purse and Walk as Control Activities.
-1. Training on 4 med taking sessions (i.e. session 3, 6, 9, 12) + Wash Hands, Look Around Purse and Walk as Control Activities.
-
-All modes were tested on the same set of activities, namely: `r knitr::combine_words(c("Turn_Key","Open_Door","Eat_From_Bag","4._Med_Taking","5._Med_Taking","7._Med_Taking","8._Med_Taking","10._Med_Taking","11._Med_Taking", "13._Med_Taking", "14._Med_Taking", "15._Med_Taking"))`.
+Testing activities consisted of `r knitr::combine_words(c("Walk_test", "Turn_Key","Open_Door","Eat_From_Bag","4._Med_Taking", "7._Med_Taking", "10._Med_Taking", "13._Med_Taking"))`.
 
 ```{r, echo=FALSE}
-loadPrediction = function(patient, mode){
-  path = list.files(path="Results", pattern = sprintf("patient_%s_pred_%s.rds", as.character(patient), mode)) 
+library(dplyr)
+source("Code/functions.R")
+
+loadPrediction = function(patient, ses){
+  path = list.files(path="Results", pattern = sprintf("patient_%s_pred_ses-%s.rds", as.character(patient), ses)) 
   resPred = readRDS(sprintf("Results/%s", path))
   return(resPred)
 }
 
-get_metrics = function(table){
-  sens = unname(table[1,1]/colSums(table)[1])
-  spec = unname(table[2,2]/colSums(table)[2])
-  J = sens + spec - 1
-  metrics = c(sens, spec, J)
-  names(metrics) = c("Sensitivity", "Specificity", "Youden's J")
-  return(metrics)
+get_metrics = function(table, type="Stat"){
+  if(type == "Stat"){
+    sens = unname(table[1,1]/colSums(table)[1]) # TP / (TP + FN)
+    spec = unname(table[2,2]/colSums(table)[2]) # TN / (TN + FP)
+    J = sens + spec - 1
+    metrics = c(sens, spec, J)
+    names(metrics) = c("Sensitivity", "Specificity", "Youden's J")
+    return(metrics)
+  }else if(type == "ML"){
+    precision = unname(table[1,1]/rowSums(table)[1]) # TP / (TP + FP) same as PPV
+    recall = unname(table[1,1]/colSums(table)[1])  # TP / (TP + FN) same as sensitivity
+    F1 = (2*(precision*recall))/(precision+recall)
+    metrics = c(precision, recall, F1)
+    names(metrics) = c("Precision (PPV)", "Recall (Sens.)", "F1 score (PS+)")
+    return(metrics)
+  }else if(type == "inverse"){
+    npv = unname(table[2,2]/rowSums(table)[2])
+    spec = unname(table[2,2]/colSums(table)[2]) # TN / (TN + FP)
+    PS.neg = (2*(npv*spec))/(npv + spec)
+    metrics = c(npv, spec, PS.neg)
+    names(metrics) = c("NPV", "Specificity", "Inverse F1 score? (PS-)")
+    return(metrics)
+  }
 }
-```
 
+show_overall_metrics = function(resPreds){
+  table = matrix(c(0,0,0,0),2,2)
+  accuracy = c()
+  test.session = data.frame(cut_off = vector("numeric", 6),
+                            correct_med_pred = vector("integer", 6),
+                            med_session = vector("numeric", 6))
+  for(pred in resPreds){
+    table = table + pred$test$Accuracy$table
+    accuracy = c(accuracy, pred$test$Accuracy$overall[1])
+    test.session = test.session + pred$test$Session 
+  }
+
+  accuracy = mean(accuracy)
+  names(accuracy) = "Accuracy"
+  
+  test.session$cut_off = test.session$cut_off / length(resPreds)
+  print(table)
+  print(accuracy)
+  print(get_metrics(table, type="ML"))
+  print(get_metrics(table, type="inverse"))
+  print(get_metrics(table))
+  invisible(test.session)
+}
+
+```
 
 ## Overall results
 
@@ -55,568 +89,91 @@ get_metrics = function(table){
 
 ```{r}
 patients = c(19, 20, 28, 32, 40, 52, 75, 86, 88, 89)
+sessions = c(5, 6, 8, 9, 11, 12)
 
-show_overall_metrics = function(resPreds){
-  table = matrix(c(0,0,0,0),2,2)
-  accuracy = c()
-  for(pred in resPreds){
-    table = table + pred$test$Accuracy$table
-    accuracy = c(accuracy, pred$test$Accuracy$overall[1])
-  }
-
-  accuracy = mean(accuracy)
-  names(accuracy) = "Accuracy"
-  
-  print(table)
-  print(accuracy)
-  print(get_metrics(table))
-}
-```
-
-
-```{r}
-resPreds = patients %>% lapply(function(x) loadPrediction(patient = x[1], mode = "1_ses_train"))
-show_overall_metrics(resPreds)
-```
-
-### Training with 1 med sessions (testing on walking)
-
-```{r}
-resPreds = patients %>% lapply(function(x) loadPrediction(patient = x[1], mode = "1_ses_train_walk"))
-show_overall_metrics(resPreds)
-```
-
-### Training with 2 med sessions
-
-```{r}
-resPreds = patients %>% lapply(function(x) loadPrediction(patient = x[1], mode = "2_ses_train"))
-show_overall_metrics(resPreds)
-```
-
-### Training with 3 med sessions
-
-```{r}
-resPreds = patients %>% lapply(function(x) loadPrediction(patient = x[1], mode = "3_ses_train"))
-show_overall_metrics(resPreds)
-```
-
-### Training with 4 med sessions
-
-```{r}
-resPreds = patients %>% lapply(function(x) loadPrediction(patient = x[1], mode = "4_ses_train"))
-show_overall_metrics(resPreds)
+pairs = expand.grid(patients, sessions)
+resPreds = pairs %>% apply(1, function(x) loadPrediction(patient = x["Var1"], ses = x["Var2"]))
+med_pred = show_overall_metrics(resPreds)
+med_pred %>% mutate(percent_correct = correct_med_pred / med_session)
 ```
 
 ## Patient 19
 
-### Training with 1 med session
-
 ```{r}
-pred = loadPrediction(19, "1_ses_train")
-pred$test$Session
-pred$test$Accuracy$table
-pred$test$Accuracy$overall[1]
-get_metrics(pred$test$Accuracy$table)
-```
-
-### Training with 1 med session (w walk)
-
-```{r}
-pred = loadPrediction(19, "1_ses_train_walk")
-pred$test$Session
-pred$test$Accuracy$table
-pred$test$Accuracy$overall[1]
-get_metrics(pred$test$Accuracy$table)
-```
-
-### Training with 2 med session
-
-```{r}
-pred = loadPrediction(19, "2_ses_train")
-pred$test$Session
-pred$test$Accuracy$table
-pred$test$Accuracy$overall[1]
-get_metrics(pred$test$Accuracy$table)
-```
-
-### Training with 3 med session
-
-```{r}
-pred = loadPrediction(19, "3_ses_train")
-pred$test$Session
-pred$test$Accuracy$table
-pred$test$Accuracy$overall[1]
-get_metrics(pred$test$Accuracy$table)
-```
-
-### Training with 4 med sessions
-
-```{r}
-pred = loadPrediction(19, "4_ses_train")
-pred$test$Session
-pred$test$Accuracy$table
-pred$test$Accuracy$overall[1]
-get_metrics(pred$test$Accuracy$table)
+pred = sessions %>% lapply(function(x) loadPrediction(19, ses = x))
+med_pred = show_overall_metrics(pred)
+med_pred %>% mutate(percent_correct = correct_med_pred / med_session)
 ```
 
 ## Patient 20
 
-### Training with 1 med session
-
 ```{r}
-pred = loadPrediction(20, "1_ses_train")
-pred$test$Session
-pred$test$Accuracy$table
-pred$test$Accuracy$overall[1]
-get_metrics(pred$test$Accuracy$table)
-```
-
-### Training with 1 med session (w walk)
-
-```{r}
-pred = loadPrediction(20, "1_ses_train_walk")
-pred$test$Session
-pred$test$Accuracy$table
-pred$test$Accuracy$overall[1]
-get_metrics(pred$test$Accuracy$table)
-```
-
-### Training with 2 med session
-
-```{r}
-pred = loadPrediction(20, "2_ses_train")
-pred$test$Session
-pred$test$Accuracy$table
-pred$test$Accuracy$overall[1]
-get_metrics(pred$test$Accuracy$table)
-```
-
-### Training with 3 med session
-
-```{r}
-pred = loadPrediction(20, "3_ses_train")
-pred$test$Session
-pred$test$Accuracy$table
-pred$test$Accuracy$overall[1]
-get_metrics(pred$test$Accuracy$table)
-```
-
-### Training with 4 med sessions
-
-```{r}
-pred = loadPrediction(20, "4_ses_train")
-pred$test$Session
-pred$test$Accuracy$table
-pred$test$Accuracy$overall[1]
-get_metrics(pred$test$Accuracy$table)
+pred = sessions %>% lapply(function(x) loadPrediction(20, ses = x))
+med_pred = show_overall_metrics(pred)
+med_pred %>% mutate(percent_correct = correct_med_pred / med_session)
 ```
 
 ## Patient 28 
 
-### Training with 1 med session
-
 ```{r}
-pred = loadPrediction(28, "1_ses_train")
-pred$test$Session
-pred$test$Accuracy$table
-pred$test$Accuracy$overall[1]
-get_metrics(pred$test$Accuracy$table)
-```
-
-### Training with 1 med session (w walk)
-
-```{r}
-pred = loadPrediction(28, "1_ses_train_walk")
-pred$test$Session
-pred$test$Accuracy$table
-pred$test$Accuracy$overall[1]
-get_metrics(pred$test$Accuracy$table)
-```
-
-### Training with 2 med session
-
-```{r}
-pred = loadPrediction(28, "2_ses_train")
-pred$test$Session
-pred$test$Accuracy$table
-pred$test$Accuracy$overall[1]
-get_metrics(pred$test$Accuracy$table)
-```
-
-### Training with 3 med session
-
-```{r}
-pred = loadPrediction(28, "3_ses_train")
-pred$test$Session
-pred$test$Accuracy$table
-pred$test$Accuracy$overall[1]
-get_metrics(pred$test$Accuracy$table)
-```
-
-### Training with 4 med sessions
-
-```{r}
-pred = loadPrediction(28, "4_ses_train")
-pred$test$Session
-pred$test$Accuracy$table
-pred$test$Accuracy$overall[1]
-get_metrics(pred$test$Accuracy$table)
+pred = sessions %>% lapply(function(x) loadPrediction(28, ses = x))
+med_pred = show_overall_metrics(pred)
+med_pred %>% mutate(percent_correct = correct_med_pred / med_session)
 ```
 
 ## Patient 32
 
-### Training with 1 med session
-
 ```{r}
-pred = loadPrediction(32, "1_ses_train")
-pred$test$Session
-pred$test$Accuracy$table
-pred$test$Accuracy$overall[1]
-get_metrics(pred$test$Accuracy$table)
-```
-
-### Training with 1 med session (w walk)
-
-```{r}
-pred = loadPrediction(32, "1_ses_train_walk")
-pred$test$Session
-pred$test$Accuracy$table
-pred$test$Accuracy$overall[1]
-get_metrics(pred$test$Accuracy$table)
-```
-
-### Training with 2 med session
-
-```{r}
-pred = loadPrediction(32, "2_ses_train")
-pred$test$Session
-pred$test$Accuracy$table
-pred$test$Accuracy$overall[1]
-get_metrics(pred$test$Accuracy$table)
-```
-
-### Training with 3 med session
-
-```{r}
-pred = loadPrediction(32, "3_ses_train")
-pred$test$Session
-pred$test$Accuracy$table
-pred$test$Accuracy$overall[1]
-get_metrics(pred$test$Accuracy$table)
-```
-
-### Training with 4 med sessions
-
-```{r}
-pred = loadPrediction(32, "4_ses_train")
-pred$test$Session
-pred$test$Accuracy$table
-pred$test$Accuracy$overall[1]
-get_metrics(pred$test$Accuracy$table)
+pred = sessions %>% lapply(function(x) loadPrediction(32, ses = x))
+med_pred = show_overall_metrics(pred)
+med_pred %>% mutate(percent_correct = correct_med_pred / med_session)
 ```
 
 ## Patient 40
-### Training with 1 med session
 
 ```{r}
-pred = loadPrediction(40, "1_ses_train")
-pred$test$Session
-pred$test$Accuracy$table
-pred$test$Accuracy$overall[1]
-get_metrics(pred$test$Accuracy$table)
-```
-
-### Training with 1 med session (w walk)
-
-```{r}
-pred = loadPrediction(40, "1_ses_train_walk")
-pred$test$Session
-pred$test$Accuracy$table
-pred$test$Accuracy$overall[1]
-get_metrics(pred$test$Accuracy$table)
-```
-
-### Training with 2 med session
-
-```{r}
-pred = loadPrediction(40, "2_ses_train")
-pred$test$Session
-pred$test$Accuracy$table
-pred$test$Accuracy$overall[1]
-get_metrics(pred$test$Accuracy$table)
-```
-
-### Training with 3 med session
-
-```{r}
-pred = loadPrediction(40, "3_ses_train")
-pred$test$Session
-pred$test$Accuracy$table
-pred$test$Accuracy$overall[1]
-get_metrics(pred$test$Accuracy$table)
-```
-
-### Training with 4 med sessions
-
-```{r}
-pred = loadPrediction(40, "4_ses_train")
-pred$test$Session
-pred$test$Accuracy$table
-pred$test$Accuracy$overall[1]
-get_metrics(pred$test$Accuracy$table)
+pred = sessions %>% lapply(function(x) loadPrediction(40, ses = x))
+med_pred = show_overall_metrics(pred)
+med_pred %>% mutate(percent_correct = correct_med_pred / med_session)
 ```
 
 ## Patient 52
-### Training with 1 med session
 
 ```{r}
-pred = loadPrediction(52, "1_ses_train")
-pred$test$Session
-pred$test$Accuracy$table
-pred$test$Accuracy$overall[1]
-get_metrics(pred$test$Accuracy$table)
-```
-
-### Training with 1 med session (w walk)
-
-```{r}
-pred = loadPrediction(52, "1_ses_train_walk")
-pred$test$Session
-pred$test$Accuracy$table
-pred$test$Accuracy$overall[1]
-get_metrics(pred$test$Accuracy$table)
-```
-
-### Training with 2 med session
-
-```{r}
-pred = loadPrediction(52, "2_ses_train")
-pred$test$Session
-pred$test$Accuracy$table
-pred$test$Accuracy$overall[1]
-get_metrics(pred$test$Accuracy$table)
-```
-
-### Training with 3 med session
-
-```{r}
-pred = loadPrediction(52, "3_ses_train")
-pred$test$Session
-pred$test$Accuracy$table
-pred$test$Accuracy$overall[1]
-get_metrics(pred$test$Accuracy$table)
-```
-
-### Training with 4 med sessions
-
-```{r}
-pred = loadPrediction(52, "4_ses_train")
-pred$test$Session
-pred$test$Accuracy$table
-pred$test$Accuracy$overall[1]
-get_metrics(pred$test$Accuracy$table)
+pred = sessions %>% lapply(function(x) loadPrediction(52, ses = x))
+med_pred = show_overall_metrics(pred)
+med_pred %>% mutate(percent_correct = correct_med_pred / med_session)
 ```
 
 ## Patient 75
-### Training with 1 med session
 
 ```{r}
-pred = loadPrediction(75, "1_ses_train")
-pred$test$Session
-pred$test$Accuracy$table
-pred$test$Accuracy$overall[1]
-get_metrics(pred$test$Accuracy$table)
-```
-
-### Training with 1 med session (w walk)
-
-```{r}
-pred = loadPrediction(75, "1_ses_train_walk")
-pred$test$Session
-pred$test$Accuracy$table
-pred$test$Accuracy$overall[1]
-get_metrics(pred$test$Accuracy$table)
-```
-
-### Training with 2 med session
-
-```{r}
-pred = loadPrediction(75, "2_ses_train")
-pred$test$Session
-pred$test$Accuracy$table
-pred$test$Accuracy$overall[1]
-get_metrics(pred$test$Accuracy$table)
-```
-
-### Training with 3 med session
-
-```{r}
-pred = loadPrediction(75, "3_ses_train")
-pred$test$Session
-pred$test$Accuracy$table
-pred$test$Accuracy$overall[1]
-get_metrics(pred$test$Accuracy$table)
-```
-
-### Training with 4 med sessions
-
-```{r}
-pred = loadPrediction(75, "4_ses_train")
-pred$test$Session
-pred$test$Accuracy$table
-pred$test$Accuracy$overall[1]
-get_metrics(pred$test$Accuracy$table)
+pred = sessions %>% lapply(function(x) loadPrediction(75, ses = x))
+med_pred = show_overall_metrics(pred)
+med_pred %>% mutate(percent_correct = correct_med_pred / med_session)
 ```
 
 ## Patient 86
-### Training with 1 med session
 
 ```{r}
-pred = loadPrediction(86, "1_ses_train")
-pred$test$Session
-pred$test$Accuracy$table
-pred$test$Accuracy$overall[1]
-get_metrics(pred$test$Accuracy$table)
-```
-
-### Training with 1 med session (w walk)
-
-```{r}
-pred = loadPrediction(86, "1_ses_train_walk")
-pred$test$Session
-pred$test$Accuracy$table
-pred$test$Accuracy$overall[1]
-get_metrics(pred$test$Accuracy$table)
-```
-
-### Training with 2 med session
-
-```{r}
-pred = loadPrediction(86, "2_ses_train")
-pred$test$Session
-pred$test$Accuracy$table
-pred$test$Accuracy$overall[1]
-get_metrics(pred$test$Accuracy$table)
-```
-
-### Training with 3 med session
-
-```{r}
-pred = loadPrediction(86, "3_ses_train")
-pred$test$Session
-pred$test$Accuracy$table
-pred$test$Accuracy$overall[1]
-get_metrics(pred$test$Accuracy$table)
-```
-
-### Training with 4 med sessions
-
-```{r}
-pred = loadPrediction(86, "4_ses_train")
-pred$test$Session
-pred$test$Accuracy$table
-pred$test$Accuracy$overall[1]
-get_metrics(pred$test$Accuracy$table)
+pred = sessions %>% lapply(function(x) loadPrediction(86, ses = x))
+med_pred = show_overall_metrics(pred)
+med_pred %>% mutate(percent_correct = correct_med_pred / med_session)
 ```
 
 ## Patient 88
-### Training with 1 med session
 
 ```{r}
-pred = loadPrediction(88, "1_ses_train")
-pred$test$Session
-pred$test$Accuracy$table
-pred$test$Accuracy$overall[1]
-get_metrics(pred$test$Accuracy$table)
-```
-
-### Training with 1 med session (w walk)
-
-```{r}
-pred = loadPrediction(88, "1_ses_train_walk")
-pred$test$Session
-pred$test$Accuracy$table
-pred$test$Accuracy$overall[1]
-get_metrics(pred$test$Accuracy$table)
-```
-
-### Training with 2 med session
-
-```{r}
-pred = loadPrediction(88, "2_ses_train")
-pred$test$Session
-pred$test$Accuracy$table
-pred$test$Accuracy$overall[1]
-get_metrics(pred$test$Accuracy$table)
-```
-
-### Training with 3 med session
-
-```{r}
-pred = loadPrediction(88, "3_ses_train")
-pred$test$Session
-pred$test$Accuracy$table
-pred$test$Accuracy$overall[1]
-get_metrics(pred$test$Accuracy$table)
-```
-
-### Training with 4 med sessions
-
-```{r}
-pred = loadPrediction(88, "4_ses_train")
-pred$test$Session
-pred$test$Accuracy$table
-pred$test$Accuracy$overall[1]
-get_metrics(pred$test$Accuracy$table)
+pred = sessions %>% lapply(function(x) loadPrediction(88, ses = x))
+med_pred = show_overall_metrics(pred)
+med_pred %>% mutate(percent_correct = correct_med_pred / med_session)
 ```
 
 ## Patient 89
 ### Training with 1 med session
 
 ```{r}
-pred = loadPrediction(89, "1_ses_train")
-pred$test$Session
-pred$test$Accuracy$table
-pred$test$Accuracy$overall[1]
-get_metrics(pred$test$Accuracy$table)
-```
-
-### Training with 1 med session (w walk)
-
-```{r}
-pred = loadPrediction(89, "1_ses_train_walk")
-pred$test$Session
-pred$test$Accuracy$table
-pred$test$Accuracy$overall[1]
-get_metrics(pred$test$Accuracy$table)
-```
-
-### Training with 2 med session
-
-```{r}
-pred = loadPrediction(89, "2_ses_train")
-pred$test$Session
-pred$test$Accuracy$table
-pred$test$Accuracy$overall[1]
-get_metrics(pred$test$Accuracy$table)
-```
-
-### Training with 3 med session
-
-```{r}
-pred = loadPrediction(89, "3_ses_train")
-pred$test$Session
-pred$test$Accuracy$table
-pred$test$Accuracy$overall[1]
-get_metrics(pred$test$Accuracy$table)
-```
-
-### Training with 4 med sessions
-
-```{r}
-pred = loadPrediction(89, "4_ses_train")
-pred$test$Session
-pred$test$Accuracy$table
-pred$test$Accuracy$overall[1]
-get_metrics(pred$test$Accuracy$table)
+pred = sessions %>% lapply(function(x) loadPrediction(89, ses = x))
+med_pred = show_overall_metrics(pred)
+med_pred %>% mutate(percent_correct = correct_med_pred / med_session)
 ```
