@@ -14,7 +14,7 @@ pca.dat <- run_pca(dat)
 
 splitWalk = function(df){
   # Rename Activity 
-  ends = range(which(pca.dat$ActivityName == "Walk"))
+  ends = range(which(df$ActivityName == "Walk"))
   mid = round(diff(ends)/2)
   df$ActivityName[ends[1]:mid] = "Walk_train"
   df$ActivityName[(mid + 1):ends[2]] = "Walk_test"
