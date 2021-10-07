@@ -25,62 +25,7 @@ Testing activities consisted of `r knitr::combine_words(c("Walk_test", "Turn_Key
 ```{r, echo=FALSE}
 library(dplyr)
 source("Code/functions.R")
-
-loadPrediction = function(patient, ses){
-  path = list.files(path="Results", pattern = sprintf("patient_%s_pred_ses-%s.rds", as.character(patient), ses)) 
-  resPred = readRDS(sprintf("Results/%s", path))
-  return(resPred)
-}
-
-get_metrics = function(table, type="Stat"){
-  if(type == "Stat"){
-    sens = unname(table[1,1]/colSums(table)[1]) # TP / (TP + FN)
-    spec = unname(table[2,2]/colSums(table)[2]) # TN / (TN + FP)
-    J = sens + spec - 1
-    metrics = c(sens, spec, J)
-    names(metrics) = c("Sensitivity", "Specificity", "Youden's J")
-    return(metrics)
-  }else if(type == "ML"){
-    precision = unname(table[1,1]/rowSums(table)[1]) # TP / (TP + FP) same as PPV
-    recall = unname(table[1,1]/colSums(table)[1])  # TP / (TP + FN) same as sensitivity
-    F1 = (2*(precision*recall))/(precision+recall)
-    metrics = c(precision, recall, F1)
-    names(metrics) = c("Precision (PPV)", "Recall (Sens.)", "F1 score (PS+)")
-    return(metrics)
-  }else if(type == "inverse"){
-    npv = unname(table[2,2]/rowSums(table)[2])
-    spec = unname(table[2,2]/colSums(table)[2]) # TN / (TN + FP)
-    PS.neg = (2*(npv*spec))/(npv + spec)
-    metrics = c(npv, spec, PS.neg)
-    names(metrics) = c("NPV", "Specificity", "Inverse F1 score? (PS-)")
-    return(metrics)
-  }
-}
-
-show_overall_metrics = function(resPreds){
-  table = matrix(c(0,0,0,0),2,2)
-  accuracy = c()
-  test.session = data.frame(cut_off = vector("numeric", 6),
-                            correct_med_pred = vector("integer", 6),
-                            med_session = vector("numeric", 6))
-  for(pred in resPreds){
-    table = table + pred$test$Accuracy$table
-    accuracy = c(accuracy, pred$test$Accuracy$overall[1])
-    test.session = test.session + pred$test$Session 
-  }
-
-  accuracy = mean(accuracy)
-  names(accuracy) = "Accuracy"
-  
-  test.session$cut_off = test.session$cut_off / length(resPreds)
-  print(table)
-  print(accuracy)
-  print(get_metrics(table, type="ML"))
-  print(get_metrics(table, type="inverse"))
-  print(get_metrics(table))
-  invisible(test.session)
-}
-
+source("Code/summary.R")
 ```
 
 ## Overall results
@@ -93,55 +38,69 @@ sessions = c(5, 6, 8, 9, 11, 12)
 
 pairs = expand.grid(patients, sessions)
 resPreds = pairs %>% apply(1, function(x) loadPrediction(patient = x["Var1"], ses = x["Var2"]))
-med_pred = show_overall_metrics(resPreds)
-med_pred %>% mutate(percent_correct = correct_med_pred / med_session)
+tables = aggregate_tables(resPreds)
+tables$confMatrix
+get_metrics(tables$confMatrix)
+tables$Session
 ```
 ## Med Taking Session 5
 
 ```{r}
 pred = patients %>% lapply(function(x) loadPrediction(x, ses = 5))
-med_pred = show_overall_metrics(pred)
-med_pred %>% mutate(percent_correct = correct_med_pred / med_session)
+tables = aggregate_tables(pred)
+tables$confMatrix
+get_metrics(tables$confMatrix) 
+tables$Session
 ```
 
 ## Med Taking Session 6
 
 ```{r}
 pred = patients %>% lapply(function(x) loadPrediction(x, ses = 6))
-med_pred = show_overall_metrics(pred)
-med_pred %>% mutate(percent_correct = correct_med_pred / med_session)
+tables = aggregate_tables(pred)
+tables$confMatrix
+get_metrics(tables$confMatrix) 
+tables$Session
 ```
 
 ## Med Taking Session 8
 
 ```{r}
 pred = patients %>% lapply(function(x) loadPrediction(x, ses = 8))
-med_pred = show_overall_metrics(pred)
-med_pred %>% mutate(percent_correct = correct_med_pred / med_session)
+tables = aggregate_tables(pred)
+tables$confMatrix
+get_metrics(tables$confMatrix) 
+tables$Session
 ```
 
 ## Med Taking Session 9
 
 ```{r}
 pred = patients %>% lapply(function(x) loadPrediction(x, ses = 9))
-med_pred = show_overall_metrics(pred)
-med_pred %>% mutate(percent_correct = correct_med_pred / med_session)
+tables = aggregate_tables(pred)
+tables$confMatrix
+get_metrics(tables$confMatrix) 
+tables$Session
 ```
 
 ## Med Taking Session 11
 
 ```{r}
 pred = patients %>% lapply(function(x) loadPrediction(x, ses = 11))
-med_pred = show_overall_metrics(pred)
-med_pred %>% mutate(percent_correct = correct_med_pred / med_session)
+tables = aggregate_tables(pred)
+tables$confMatrix
+get_metrics(tables$confMatrix) 
+tables$Session
 ```
 
 ## Med Taking Session 12
 
 ```{r}
 pred = patients %>% lapply(function(x) loadPrediction(x, ses = 12))
-med_pred = show_overall_metrics(pred)
-med_pred %>% mutate(percent_correct = correct_med_pred / med_session)
+tables = aggregate_tables(pred)
+tables$confMatrix
+get_metrics(tables$confMatrix) 
+tables$Session
 ```
 
 
@@ -149,79 +108,98 @@ med_pred %>% mutate(percent_correct = correct_med_pred / med_session)
 
 ```{r}
 pred = sessions %>% lapply(function(x) loadPrediction(19, ses = x))
-med_pred = show_overall_metrics(pred)
-med_pred %>% mutate(percent_correct = correct_med_pred / med_session)
+tables = aggregate_tables(pred)
+tables$confMatrix
+get_metrics(tables$confMatrix) 
+tables$Session
 ```
 
 ## Patient 20
 
 ```{r}
 pred = sessions %>% lapply(function(x) loadPrediction(20, ses = x))
-med_pred = show_overall_metrics(pred)
-med_pred %>% mutate(percent_correct = correct_med_pred / med_session)
+tables = aggregate_tables(pred)
+tables$confMatrix
+get_metrics(tables$confMatrix) 
+tables$Session
 ```
 
 ## Patient 28 
 
 ```{r}
 pred = sessions %>% lapply(function(x) loadPrediction(28, ses = x))
-med_pred = show_overall_metrics(pred)
-med_pred %>% mutate(percent_correct = correct_med_pred / med_session)
+tables = aggregate_tables(pred)
+tables$confMatrix
+get_metrics(tables$confMatrix) 
+tables$Session
 ```
 
 ## Patient 32
 
 ```{r}
 pred = sessions %>% lapply(function(x) loadPrediction(32, ses = x))
-med_pred = show_overall_metrics(pred)
-med_pred %>% mutate(percent_correct = correct_med_pred / med_session)
+tables = aggregate_tables(pred)
+tables$confMatrix
+get_metrics(tables$confMatrix) 
+tables$Session
 ```
 
 ## Patient 40
 
 ```{r}
 pred = sessions %>% lapply(function(x) loadPrediction(40, ses = x))
-med_pred = show_overall_metrics(pred)
-med_pred %>% mutate(percent_correct = correct_med_pred / med_session)
+tables = aggregate_tables(pred)
+tables$confMatrix
+get_metrics(tables$confMatrix) 
+tables$Session
 ```
 
 ## Patient 52
 
 ```{r}
 pred = sessions %>% lapply(function(x) loadPrediction(52, ses = x))
-med_pred = show_overall_metrics(pred)
-med_pred %>% mutate(percent_correct = correct_med_pred / med_session)
+tables = aggregate_tables(pred)
+tables$confMatrix
+get_metrics(tables$confMatrix) 
+tables$Session
 ```
 
 ## Patient 75
 
 ```{r}
 pred = sessions %>% lapply(function(x) loadPrediction(75, ses = x))
-med_pred = show_overall_metrics(pred)
-med_pred %>% mutate(percent_correct = correct_med_pred / med_session)
+tables = aggregate_tables(pred)
+tables$confMatrix
+get_metrics(tables$confMatrix) 
+tables$Session
 ```
 
 ## Patient 86
 
 ```{r}
 pred = sessions %>% lapply(function(x) loadPrediction(86, ses = x))
-med_pred = show_overall_metrics(pred)
-med_pred %>% mutate(percent_correct = correct_med_pred / med_session)
+tables = aggregate_tables(pred)
+tables$confMatrix
+get_metrics(tables$confMatrix) 
+tables$Session
 ```
 
 ## Patient 88
 
 ```{r}
 pred = sessions %>% lapply(function(x) loadPrediction(88, ses = x))
-med_pred = show_overall_metrics(pred)
-med_pred %>% mutate(percent_correct = correct_med_pred / med_session)
+tables = aggregate_tables(pred)
+tables$confMatrix
+get_metrics(tables$confMatrix) 
+tables$Session
 ```
 
 ## Patient 89
-### Training with 1 med session
 
 ```{r}
 pred = sessions %>% lapply(function(x) loadPrediction(89, ses = x))
-med_pred = show_overall_metrics(pred)
-med_pred %>% mutate(percent_correct = correct_med_pred / med_session)
+tables = aggregate_tables(pred)
+tables$confMatrix
+get_metrics(tables$confMatrix) 
+tables$Session
 ```
