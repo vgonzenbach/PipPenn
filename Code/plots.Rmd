@@ -1,0 +1,65 @@
+---
+title: "plots.Rmd"
+author: "Virgilio Gonzenbach"
+date: "10/7/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, fig.align = "center",
+                      message = FALSE, warning = FALSE,
+                      fig.width = 10)
+knitr::opts_knit$set(root.dir = rprojroot::find_rstudio_root_file())
+```
+
+```{r load}
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(ggpubr)
+library(ggsci)
+source("Code/functions.R")
+source("Code/summary.R")
+
+patients = c(19, 20, 28, 32, 40, 52, 75, 86, 88, 89)
+sessions = c(5, 6, 8, 9, 11, 12)
+
+make_metrics_df = function(){
+  metrics.mat = matrix(data=NA, nrow=10, ncol=7)
+  for(i in 1:length(patients)){
+    resPreds = sessions %>% lapply(function(x) loadPrediction(patients[i], ses = x))
+    metrics.mat[i,] = get_metrics(aggregate_tables(resPreds)$confMatrix)
+    i = i + 1
+  }
+
+  colnames(metrics.mat) = c("Sensitivity", "Specificity", "Precision", "NPV", "F1.score", "Inv.F1.score", "Accuracy")
+
+  metrics.df = as.data.frame(metrics.mat) %>% tibble::add_column(patients,.before = 1)
+  return(metrics.df)
+}
+```
+
+
+```{r boxplot}
+metrics_df_long = make_metrics_df() %>% select(patients, Accuracy, Precision, F1.score, Sensitivity, Specificity) %>% pivot_longer(cols = -patients, names_to = "metric")
+metrics_df_long %>% ggplot(aes(x=metric, y = value, color=metric)) + geom_jitter() + theme_bw() + geom_boxplot(alpha=0) + 
+  ggtitle("Summary metrics for Movelet prediction (1 session training)") + theme(plot.title = element_text(hjust = 0.5)) + scale_color_lancet()
+
+```
+
+```{r}
+df = expand.grid(patients, sessions)
+colnames(df) = c("patient", "session")
+
+make_metrics_df = function(df){
+  # for each patient, ses combination get metrics
+  df %>% apply(1, function(x){
+    get_metrics(loadPrediction(patient = x["patient"], ses = x["session"])$test$Accuracy$table)
+    
+  }) %>% t() %>% as.data.frame()
+}
+
+make_metrics_df(df)
+```
+
+
