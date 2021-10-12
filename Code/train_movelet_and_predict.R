@@ -26,8 +26,11 @@ pca.dat = splitWalk(pca.dat)
 med.ses = args[2]
 # turn digit into label
 label.ses = function(med.ses){
+  # split 
+  sessions = unlist(strsplit(med.ses, ","))
   labels = unique(pca.dat$ActivityName)
-  ses.label = labels[grep(paste0("^", med.ses), labels)]
+  
+  ses.label = labels[sapply(sessions, function(x) grep(paste0("^", x), labels))]
   return(ses.label)
 }
 
