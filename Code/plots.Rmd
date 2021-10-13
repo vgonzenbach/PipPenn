@@ -2,13 +2,15 @@
 title: "Movelet: Output for Paper"
 author: "Virgilio Gonzenbach"
 date: "10/7/2021"
-output: html_document
+output:
+  html_document: default
+  pdf_document: default
 ---
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = FALSE, fig.align = "center",
                       message = FALSE, warning = FALSE,
-                      fig.width = 10)
+                      fig.width = 10, cache = TRUE)
 knitr::opts_knit$set(root.dir = rprojroot::find_rstudio_root_file())
 ```
 
@@ -46,21 +48,50 @@ make_metrics_df = function(df){
 metrics_df = make_metrics_df(df)
 ```
 
-## Metrics across patients
+## Training 1 med session
+### Metrics across patients
 
-```{r boxplot}
+```{r boxplot_n1}
 metrics_df_long = metrics_df %>% group_by(patient) %>% select(Accuracy, Precision, F1.score, Sensitivity, Specificity) %>% summarize_all(mean) %>% pivot_longer(-patient, names_to = "Metric")
 metrics_df_long %>% ggplot(aes(x=Metric, y = value, color=Metric)) + geom_jitter() + theme_bw() + geom_boxplot(alpha=0) + 
-  ggtitle("Summary metrics for Movelet prediction (1 session training)") + theme(plot.title = element_text(hjust = 0.5)) + scale_color_lancet()
+  ggtitle("Summary metrics for Movelet prediction (1 session training)") + theme(plot.title = element_text(hjust = 0.5)) + scale_color_d3()
 
 ```
 
-## Metrics across sessions
+### Metrics across sessions
 
-```{r}
+```{r table_n1}
 table = metrics_df %>% group_by(session) %>% select(Accuracy, Precision, correct_at_0.5) %>% summarize_all(mean) 
 colnames(table)[4] = "Percent Correct"
 table %>% kableExtra::kable() %>% kableExtra::kable_styling("striped", position = "center")
 ```
 
+## Metrics across training modes
 
+```{r}
+# df = expand.grid(patients, sessions)
+
+sessions_n2 = combn(sessions, 2) %>% t() %>% apply(1, function(x) paste(x[1], x[2], sep=","))
+sessions_n3 = combn(sessions, 3) %>% t() %>% apply(1, function(x) paste(x[1], x[2], x[3], sep=","))
+
+df = rbind(expand.grid(patients, sessions), 
+           expand.grid(patients, sessions_n2),
+           expand.grid(patients, sessions_n3))
+
+colnames(df) = c("patient", "session")
+
+metrics_df = make_metrics_df(df)
+
+# make n_train
+metrics_df = metrics_df %>% tibble::add_column(n_train = stringr::str_count(metrics_df$session, ",") + 1, .before = "session") 
+```
+
+```{r train_n_boxplot}
+metrics_df_long = metrics_df %>% group_by(patient, n_train) %>% select(Accuracy, Precision, F1.score, Sensitivity, Specificity) %>% summarize_all(mean) %>% pivot_longer(-c(patient, n_train),  names_to = "Metric")
+
+metrics_df_long %>% ggplot(aes(x=n_train, y = value, color=as.factor(n_train))) + 
+  geom_jitter() + facet_grid(~Metric) +  geom_boxplot(alpha=0) + 
+  theme_bw() + ggtitle("Summary metrics for Movelet prediction (n session training)") + 
+  theme(plot.title = element_text(hjust = 0.5)) + guides(color=guide_legend(title="N trained med sessions")) + xlab("Train N") +
+  scale_color_lancet() 
+```
