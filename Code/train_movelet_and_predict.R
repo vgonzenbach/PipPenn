@@ -4,6 +4,7 @@ setwd(rprojroot::find_rstudio_root_file())
 source("Code/functions.R")
 library(dplyr)
 library(caret)
+library(tvR)
 
 args = commandArgs(trailingOnly = TRUE)
 data.path = args[1]
@@ -35,7 +36,8 @@ label.ses = function(med.ses){
 }
 
 ## train chapters
-train.label =  c(label.ses(med.ses), "Walk_train", "Wash_Hands","Look_around_in_bag_or_purse")
+train_control = c("Walk_train", "Wash_Hands","Look_around_in_bag_or_purse")
+train.label =  c(label.ses(med.ses), train_control)
 
 movelet.dat <- Acceleration_Create2(pca.dat,subjectName= dat$PatientID[1],
                                     n_axes = 6,frequency=50) # 50 obs per second
@@ -49,7 +51,8 @@ for(i in 1:length(train.label)){
 }
 
 ## create movelet-ready data 
-test.dat <- subset(pca.dat, ActivityName %in% c("Walk_test", "Turn_Key","Open_Door","Eat_From_Bag",
+test_control = c("Walk_test", "Turn_Key","Open_Door","Eat_From_Bag")
+test.dat <- subset(pca.dat, ActivityName %in% c(test_control,
                                                 "4._Med_Taking","7._Med_Taking", "10._Med_Taking", "13._Med_Taking"))
 
 test.movelet.dat <- Acceleration_Create2(test.dat,subjectName=dat$PatientID[1],n_axes = 6,frequency=50) 
@@ -59,7 +62,7 @@ pred <- Movelet_Pred2(test.movelet.dat, Act.Names=train.label, vote=TRUE)
 pred$Pred2 <- recode(pred$Pred, `1`=train.label[1], `2`=train.label[2],`3`=train.label[3],`4`=train.label[4], `5`=train.label[5])
 
 ## Evaluate prediction
-pred$test <- eval_prediction(test.movelet.dat, pred, n_control_acts = 4)
+pred$test <- eval_prediction(test.movelet.dat, pred, train_control, test_control)
 
 # Save it
 saveRDS(pred, file = sprintf("Results/%s_pred_ses-%s.rds", tools::file_path_sans_ext(basename(data.path)), med.ses))

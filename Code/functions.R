@@ -1,12 +1,10 @@
-library(lubridate
-)
 run_pca = function(dat)
 {
   dat$Activitylabel<-match(dat$ActivityName,unique(dat$ActivityName))
   
   #convert time series and reorder data by time
   dat$timestamp<-substr(dat$activity_timestamp,12,23)
-  dat$time<- as.numeric(hms(dat$timestamp))
+  dat$time<- as.numeric(lubridate::hms(dat$timestamp))
   dat <- dat[sort.int(dat$time, index.return = TRUE)$ix, ]
   dat$time<-dat$time-dat$time[1]
   
@@ -186,29 +184,30 @@ Movelet_Pred2=function(x,Act.Names,vote=FALSE)
 }
 
 ## Evaluate prediction
-eval_prediction = function(test.movelet.dat, pred, n_control_acts) 
+eval_prediction = function(test.movelet.dat, pred, train_control, test_control) 
 {
   ## Predict number of med taking session!
   ## test.movelet.dat is the result of accel_create2 function
   ## pred is the result of the movelet_pred2 function
+  ## test_control is the test activities that are not med-taking
   ## n_control_acts is the number of test activities that are not med-taking
   temp <- data.frame(cbind(test.movelet.dat$Label[1:length(pred$Pred2)], pred$Pred2, 
                            pred$Pred))
   colnames(temp) <- c("Label","Pred","Pred_num")
-  temp$Pred2 <- factor(ifelse(temp$Pred %in% c("Wash_Hands","Look_around_in_bag_or_purse"), "Not Med Taking","Med Taking"))
+  temp$Pred2 <- factor(ifelse(temp$Pred %in% train_control, "Not Med Taking","Med Taking"))
   temp$Pred2_num <- factor(ifelse(temp$Pred2 =="Not Med Taking",2,1))
   #n_control_acts <- 3 ## change me or add this into the function!
-  train <- rle(as.character(temp$Label))
-  test <- rle(as.numeric(temp$Pred2_num))
-  med_taking_start_idx <- (cumsum(train$lengths)+1)[n_control_acts:length(train$lengths)]
-  med_session <- length(med_taking_start_idx) - 1
-  med_length <- train$lengths[grep("Med_Taking",train$values)]
+  true <- rle(as.character(temp$Label))
+  #test <- rle(as.numeric(temp$Pred2_num))
+  med_taking_start_idx <- (cumsum(true$lengths)+1)[length(test_control):length(true$lengths)]
+  med_session <- length(med_taking_start_idx) -1 
+  med_length <- true$lengths[grep("Med_Taking",true$values)]
   
   cut_off <- seq(0.50,0.75,0.05)
   correct_med_pred <- c()
   for(j in 1:length(cut_off)){
     ## define cut off
-    cut_off_median <- median(cut_off[j]*train$lengths[5:length(train$lengths)])
+    cut_off_median <- median(cut_off[j]*true$lengths[(length(test_control)+1):length(true$lengths)])
     pred_res <- c()
     for(i in 1:(length(med_taking_start_idx)-1)){
       if(length(which(temp$Pred2[med_taking_start_idx[i]:med_taking_start_idx[i+1]] == "Med Taking")) > cut_off_median){
@@ -219,14 +218,47 @@ eval_prediction = function(test.movelet.dat, pred, n_control_acts)
   }
   
   ## Accuracy
-  temp2 <- data.frame(cbind(test.movelet.dat$Label[1:length(pred$Pred2)], pred$Pred2))
-  temp2$True_label <- factor(ifelse(temp2$X1 %in% c("Open_Door","Turn_Key","Eat_From_Bag"), "Not Med Taking","Med Taking"))
-  temp2$Pred_label <- factor(ifelse(temp2$X2 %in% c("Wash_Hands","Look_around_in_bag_or_purse"), "Not Med Taking","Med Taking"))
+  pred$Pred3 <- ifelse(pred$Pred == 1, 1, 2)
+  pred$Pred3 <- round(tvR::denoise1(pred$Pred3, lambda = 35, method = "TVL2.MM"))
+  temp2 <- data.frame(cbind(test.movelet.dat$Label[1:length(pred$Pred3)], pred$Pred3))
+  temp2$True_label <- factor(ifelse(temp2$X1 %in% test_control, "Not Med Taking","Med Taking"))
+  temp2$Pred_label <- factor(ifelse(temp2$X2 == 2, "Not Med Taking","Med Taking"))
   conf_mat <- confusionMatrix(data = temp2$Pred_label, reference = temp2$True_label)
   
   return(list(Session = data.frame(cut_off,correct_med_pred, med_session), Accuracy = conf_mat))
 }
 
+## wrapper 
+run_movelet <- function(filename){
+  dat <- readRDS(file = paste0("~/Movelets/Data/",filename))
+  ## clean up data and perform pca
+  pca.dat <- run_pca(dat)
+  ## create movelet-ready data 
+  movelet.dat <- Acceleration_Create2(pca.dat,subjectName= dat$PatientID[1],
+                                      n_axes = 6,frequency=50) 
+  ## train chapters
+  train.label <- c(train.control, train.med)
+  for(i in 1:length(train.label)){
+    from <- min(which(movelet.dat$Label == train.label[i])) 
+    to <- max(which(movelet.dat$Label == train.label[i])) 
+    assign(paste0("Ch.",train.label[i],".",movelet.dat$Subject),
+           Movelet_Create2(FROM = from ,TO = to, 
+                           DATA = movelet.dat, n_axes = 6,
+                           ChapName = train.label[i]), envir = .GlobalEnv)
+  }
+  ## test data
+  test.dat <- subset(pca.dat, ActivityName %in% c(test.control,test.med))
+  test.movelet.dat <- Acceleration_Create2(test.dat,subjectName=dat$PatientID[1],n_axes = 6,frequency=50)
+  #expand the prediction activity labels to include all trained chapters
+  pred <- Movelet_Pred2(test.movelet.dat, Act.Names=train.label, vote=TRUE)
+  pred$Pred2 <- recode(pred$Pred, `1`=train.label[1], `2`=train.label[2], `3`=train.label[3], `4`=train.label[4],`5`=train.label[5])
+  ## Evaluate prediction
+  pred$test <- eval_prediction(test.movelet.dat, pred, n_control_acts = 3)
+  # Save it
+  saveRDS(pred, file = paste0("Results_",filename,".rds"))
+  print(paste0(filename,"done"))
+  return(pred)
+}
 
 
 
