@@ -35,6 +35,8 @@ label.ses = function(med.ses){
   return(ses.label)
 }
 
+smoothing = as.logical(args[3])
+
 ## train chapters
 train_control = c("Walk_train", "Wash_Hands","Look_around_in_bag_or_purse")
 train.label =  c(label.ses(med.ses), train_control)
@@ -59,11 +61,12 @@ test.movelet.dat <- Acceleration_Create2(test.dat,subjectName=dat$PatientID[1],n
 
 #expand the prediction activity labels to include all trained chapters
 pred <- Movelet_Pred2(test.movelet.dat, Act.Names=train.label, vote=TRUE)
-pred$Pred2 <- recode(pred$Pred, `1`=train.label[1], `2`=train.label[2],`3`=train.label[3],`4`=train.label[4], `5`=train.label[5])
+pred$Pred2 <- train.label[pred$Pred]
 
 ## Evaluate prediction
-pred$test <- eval_prediction(test.movelet.dat, pred, train_control, test_control)
+pred$test <- eval_prediction(test.movelet.dat, pred, train_control, test_control, smoothing = smoothing)
 
 # Save it
-saveRDS(pred, file = sprintf("Results/%s_pred_ses-%s.rds", tools::file_path_sans_ext(basename(data.path)), med.ses))
+smooth_dir = ifelse(smoothing, "post-smooth", "pre-smooth")
+saveRDS(pred, file = sprintf("Results/%s/%s_pred_ses-%s.rds", smooth_dir, tools::file_path_sans_ext(basename(data.path)), med.ses))
 

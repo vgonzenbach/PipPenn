@@ -184,7 +184,7 @@ Movelet_Pred2=function(x,Act.Names,vote=FALSE)
 }
 
 ## Evaluate prediction
-eval_prediction = function(test.movelet.dat, pred, train_control, test_control) 
+eval_prediction = function(test.movelet.dat, pred, train_control, test_control, smoothing = TRUE) 
 {
   ## Predict number of med taking session!
   ## test.movelet.dat is the result of accel_create2 function
@@ -195,10 +195,8 @@ eval_prediction = function(test.movelet.dat, pred, train_control, test_control)
                            pred$Pred))
   colnames(temp) <- c("Label","Pred","Pred_num")
   temp$Pred2 <- factor(ifelse(temp$Pred %in% train_control, "Not Med Taking","Med Taking"))
-  temp$Pred2_num <- factor(ifelse(temp$Pred2 =="Not Med Taking",2,1))
-  #n_control_acts <- 3 ## change me or add this into the function!
+  temp$Pred2_num <- ifelse(temp$Pred2 =="Not Med Taking",2,1)
   true <- rle(as.character(temp$Label))
-  #test <- rle(as.numeric(temp$Pred2_num))
   med_taking_start_idx <- (cumsum(true$lengths)+1)[length(test_control):length(true$lengths)]
   med_session <- length(med_taking_start_idx) -1 
   med_length <- true$lengths[grep("Med_Taking",true$values)]
@@ -218,9 +216,10 @@ eval_prediction = function(test.movelet.dat, pred, train_control, test_control)
   }
   
   ## Accuracy
-  pred$Pred3 <- ifelse(pred$Pred == 1, 1, 2)
-  pred$Pred3 <- round(tvR::denoise1(pred$Pred3, lambda = 35, method = "TVL2.MM"))
-  temp2 <- data.frame(cbind(test.movelet.dat$Label[1:length(pred$Pred3)], pred$Pred3))
+  if(smoothing){
+    temp$Pred2_num <- round(tvR::denoise1(temp$Pred2_num, lambda = 35, method = "TVL2.MM"))    
+  }
+  temp2 <- data.frame(cbind(test.movelet.dat$Label[1:length(temp$Pred2_num)], temp$Pred2_num))
   temp2$True_label <- factor(ifelse(temp2$X1 %in% test_control, "Not Med Taking","Med Taking"))
   temp2$Pred_label <- factor(ifelse(temp2$X2 == 2, "Not Med Taking","Med Taking"))
   conf_mat <- confusionMatrix(data = temp2$Pred_label, reference = temp2$True_label)

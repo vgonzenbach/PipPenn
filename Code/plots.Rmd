@@ -10,7 +10,7 @@ output:
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = FALSE, fig.align = "center",
                       message = FALSE, warning = FALSE,
-                      fig.width = 10, cache = TRUE)
+                      fig.width = 10)
 knitr::opts_knit$set(root.dir = rprojroot::find_rstudio_root_file())
 ```
 
@@ -20,21 +20,21 @@ library(tidyr)
 library(ggplot2)
 library(ggpubr)
 library(ggsci)
-library(tvR)
 source("Code/functions.R")
 source("Code/summary.R")
 
 patients = c(19, 20, 28, 32, 40, 52, 75, 86, 88, 89)
 sessions = c(5, 6, 8, 9, 11, 12)
+smooth = c(TRUE, FALSE)
 
-df = expand.grid(patients, sessions)
-colnames(df) = c("patient", "session")
+df = expand.grid(patients, sessions, smooth)
+colnames(df) = c("patient", "session", "smooth")
 
 make_metrics_df = function(df){
   
   # for each patient, ses combination get metrics from confusion matrix + percent_correct at each cut_off
   metrics_df = df %>% apply(1, function(x){
-    pred = loadPrediction(patient = x["patient"], ses = x["session"])
+    pred = loadPrediction(patient = x["patient"], ses = x["session"], x["smooth"])
     row = get_metrics(pred$test$Accuracy$table)
     
     percent_correct = mutate(pred$test$Session, percent_correct = correct_med_pred / med_session)$percent_correct
@@ -47,23 +47,34 @@ make_metrics_df = function(df){
 }
 
 metrics_df = make_metrics_df(df)
+metrics_df$smooth = paste0("smooth=", metrics_df$smooth)
 ```
 
 ## Training 1 med session
 ### Metrics across patients
 
 ```{r boxplot_n1}
-metrics_df_long = metrics_df %>% group_by(patient) %>% select(Accuracy, Precision, F1.score, Sensitivity, Specificity) %>% summarize_all(mean) %>% pivot_longer(-patient, names_to = "Metric")
-metrics_df_long %>% ggplot(aes(x=Metric, y = value, color=Metric)) + geom_jitter() + theme_bw() + geom_boxplot(alpha=0) + 
-  ggtitle("Summary metrics for Movelet prediction (1 session training)") + theme(plot.title = element_text(hjust = 0.5)) + scale_color_d3()
+metrics_df_long = metrics_df %>% group_by(patient, smooth) %>% select(Accuracy, Precision, F1.score, Sensitivity, Specificity) %>% summarize_all(mean) %>% pivot_longer(-c(patient, smooth), names_to = "Metric")
+
+metrics_df_long %>% ggplot(aes(x=Metric, y = value, color=Metric)) + geom_jitter() + geom_boxplot(alpha=0) + facet_wrap(~smooth) + 
+  theme_bw() + ggtitle("Summary metrics for Movelet prediction (1 session training)") + theme(plot.title = element_text(hjust = 0.5)) +
+  scale_color_d3()
 
 ```
 
 ### Metrics across sessions
 
+#### Smooth=TRUE
+
 ```{r table_n1}
-table = metrics_df %>% group_by(session) %>% select(Accuracy, Precision, correct_at_0.5) %>% summarize_all(mean) 
-colnames(table)[4] = "Percent Correct"
+table = metrics_df %>% filter(smooth=="smooth=TRUE") %>% group_by(session) %>% select(Accuracy, Precision, F1.score, Sensitivity, Specificity) %>% summarize_all(mean) 
+table %>% kableExtra::kable() %>% kableExtra::kable_styling("striped", position = "center")
+```
+
+#### Smooth=FALSE
+
+```{r}
+table = metrics_df %>% filter(smooth=="smooth=FALSE") %>% group_by(session) %>% select(Accuracy, Precision, F1.score, Sensitivity, Specificity) %>% summarize_all(mean) 
 table %>% kableExtra::kable() %>% kableExtra::kable_styling("striped", position = "center")
 ```
 
@@ -72,26 +83,27 @@ table %>% kableExtra::kable() %>% kableExtra::kable_styling("striped", position 
 ```{r}
 # df = expand.grid(patients, sessions)
 
-sessions_n2 = combn(sessions, 2) %>% t() %>% apply(1, function(x) paste(x[1], x[2], sep=","))
-sessions_n3 = combn(sessions, 3) %>% t() %>% apply(1, function(x) paste(x[1], x[2], x[3], sep=","))
+sessions_n2 = combn(sessions, 2) %>% t() %>% apply(1, function(x) paste(x, collapse=","))
+sessions_n3 = combn(sessions, 3) %>% t() %>% apply(1, function(x) paste(x, collapse=","))
 
-df = rbind(expand.grid(patients, sessions), 
-           expand.grid(patients, sessions_n2),
-           expand.grid(patients, sessions_n3))
+df = rbind(expand.grid(patients, sessions, smooth), 
+           expand.grid(patients, sessions_n2, smooth),
+           expand.grid(patients, sessions_n3, smooth))
 
-colnames(df) = c("patient", "session")
+colnames(df) = c("patient", "session", "smooth")
 
 metrics_df = make_metrics_df(df)
 
 # make n_train
 metrics_df = metrics_df %>% tibble::add_column(n_train = stringr::str_count(metrics_df$session, ",") + 1, .before = "session") 
+metrics_df$smooth = paste0("smooth=", metrics_df$smooth)
 ```
 
 ```{r train_n_boxplot}
-metrics_df_long = metrics_df %>% group_by(patient, n_train) %>% select(Accuracy, Precision, F1.score, Sensitivity, Specificity) %>% summarize_all(mean) %>% pivot_longer(-c(patient, n_train),  names_to = "Metric")
+metrics_df_long = metrics_df %>% group_by(patient, n_train, smooth) %>% select(Accuracy, Precision, F1.score, Sensitivity, Specificity) %>% summarize_all(mean) %>% pivot_longer(-c(patient, n_train, smooth),  names_to = "Metric")
 
 metrics_df_long %>% ggplot(aes(x=n_train, y = value, color=as.factor(n_train))) + 
-  geom_jitter() + facet_grid(~Metric) +  geom_boxplot(alpha=0) + 
+  geom_jitter() + facet_grid(smooth~Metric) +  geom_boxplot(alpha=0) + 
   theme_bw() + ggtitle("Summary metrics for Movelet prediction (n session training)") + 
   theme(plot.title = element_text(hjust = 0.5)) + guides(color=guide_legend(title="N trained med sessions")) + xlab("Train N") +
   scale_color_lancet() 
