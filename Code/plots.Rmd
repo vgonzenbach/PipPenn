@@ -1,10 +1,9 @@
 ---
-title: "Movelet: Output for Paper"
+title: 'Movelet: Output for Paper'
 author: "Virgilio Gonzenbach"
 date: "10/7/2021"
 output:
   html_document: default
-  pdf_document: default
 ---
 
 ```{r setup, include=FALSE}
@@ -20,6 +19,7 @@ library(tidyr)
 library(ggplot2)
 library(ggpubr)
 library(ggsci)
+library(flextable)
 source("Code/functions.R")
 source("Code/summary.R")
 
@@ -42,12 +42,14 @@ make_metrics_df = function(df){
     row = c(row, percent_correct)
     return(row)
   }) %>% t() %>% as.data.frame()
-
+  
   return(cbind(df, metrics_df))
 }
 
+# Prepare smoothing indicator variable for plotting
 metrics_df = make_metrics_df(df)
-metrics_df$smooth = paste0("smooth=", metrics_df$smooth)
+metrics_df$smooth = ifelse(metrics_df$smooth, "Post-Smoothing", "Pre-Smoothing") # Fix name
+metrics_df$smooth = factor(metrics_df$smooth, levels=rev(unique(metrics_df$smooth))) # Reverse order
 ```
 
 ## Training 1 med session
@@ -59,30 +61,41 @@ metrics_df_long = metrics_df %>% group_by(patient, smooth) %>% select(Accuracy, 
 metrics_df_long %>% ggplot(aes(x=Metric, y = value, color=Metric)) + geom_jitter() + geom_boxplot(alpha=0) + facet_wrap(~smooth) + 
   theme_bw() + ggtitle("Summary metrics for Movelet prediction (1 session training)") + theme(plot.title = element_text(hjust = 0.5)) +
   scale_color_d3()
-
 ```
 
 ### Metrics across sessions
 
-#### Smooth=TRUE
+```{r table_n1, results='asis'}
 
-```{r table_n1}
-table = metrics_df %>% filter(smooth=="smooth=TRUE") %>% group_by(session) %>% select(Accuracy, Precision, F1.score, Sensitivity, Specificity) %>% summarize_all(mean) 
-table %>% kableExtra::kable() %>% kableExtra::kable_styling("striped", position = "center")
-```
+# Prepare table with smoothing
+table1 = metrics_df %>% filter(smooth=="Pre-Smoothing") %>% group_by(session) %>% select(Accuracy, Precision, F1.score, Sensitivity, Specificity) %>% summarize_all(mean)
 
-#### Smooth=FALSE
+# Prepare table without smoothing
+table2 = metrics_df %>% filter(smooth=="Post-Smoothing") %>% group_by(session) %>% select(Accuracy, Precision, F1.score, Sensitivity, Specificity) %>% summarize_all(mean) %>% as.data.frame()
 
-```{r}
-table = metrics_df %>% filter(smooth=="smooth=FALSE") %>% group_by(session) %>% select(Accuracy, Precision, F1.score, Sensitivity, Specificity) %>% summarize_all(mean) 
-table %>% kableExtra::kable() %>% kableExtra::kable_styling("striped", position = "center")
+# Join tables
+tables = cbind(table1, table2[, -1]) %>% round(2)
+colnames(tables)[2:11] = paste0(colnames(tables)[2:11], rep(c(".T", ".F"), each = 5))
+headers = data.frame(col_keys = colnames(tables), 
+                     from = c("Session", rep(c("Pre-Smoothing", "Post-Smoothing"), each=5)),
+                     names = c("Session", colnames(cbind(table1[-1], table2[, -1])))
+                     )
+# Print table as flextable
+tables %>% flextable::flextable() %>% 
+  set_header_df(mapping = headers, key = "col_keys") %>% 
+  merge_h(part="header") %>% 
+  merge_v(part="header") %>% 
+  theme_vanilla() %>% 
+  width(width = 27, unit = "in") %>% 
+  align(align="center", part="all") %>% 
+  vline(part="header")
+  
 ```
 
 ## Metrics across training modes
 
 ```{r}
-# df = expand.grid(patients, sessions)
-
+# Load data for all training modes
 sessions_n2 = combn(sessions, 2) %>% t() %>% apply(1, function(x) paste(x, collapse=","))
 sessions_n3 = combn(sessions, 3) %>% t() %>% apply(1, function(x) paste(x, collapse=","))
 
@@ -94,9 +107,10 @@ colnames(df) = c("patient", "session", "smooth")
 
 metrics_df = make_metrics_df(df)
 
-# make n_train
+# make n_train dataframe
 metrics_df = metrics_df %>% tibble::add_column(n_train = stringr::str_count(metrics_df$session, ",") + 1, .before = "session") 
-metrics_df$smooth = paste0("smooth=", metrics_df$smooth)
+metrics_df$smooth = ifelse(metrics_df$smooth, "Post-Smoothing", "Pre-Smoothing")
+metrics_df$smooth = factor(metrics_df$smooth, levels=rev(unique(metrics_df$smooth))) # Reverse order
 ```
 
 ```{r train_n_boxplot}
