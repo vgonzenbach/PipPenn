@@ -1,0 +1,10 @@
+.R*
+Annotations/
+docs/
+old*
+Movelet/
+Results/
+Data/
+logs
+Code/plots_*
+*.DS_Store
