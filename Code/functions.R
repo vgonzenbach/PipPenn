@@ -1,4 +1,4 @@
-run_pca = function(dat)
+run_pca = function(dat, npc = 3)
 {
   dat$Activitylabel<-match(dat$ActivityName,unique(dat$ActivityName))
   
@@ -35,7 +35,8 @@ run_pca = function(dat)
                            "attitude_x_coord","attitude_y_coord","attitude_z_coord")]
   varsleft.pca <- prcomp(vars_left, center=TRUE, scale.=TRUE)
   #summary(varsleft.pca)
-  pcs_left <- varsleft.pca$x[,1:3]
+  pcs_left <- varsleft.pca$x[,1:npc]
+  colnames(pcs_left) <- paste( colnames(pcs_left),"_left", sep ="")
   
   ## extract 3 pcs for the right hand
   vars_right <- dat[dat$Wrist_Location=="right",
@@ -46,14 +47,76 @@ run_pca = function(dat)
                             "attitude_x_coord","attitude_y_coord","attitude_z_coord")]
   varsright.pca <- prcomp(vars_right, center=TRUE, scale.=TRUE)
   #summary(varsright.pca)
-  pcs_right <- varsright.pca$x[,1:3]
+  pcs_right <- varsright.pca$x[,1:npc]
+  colnames(pcs_right) <- paste( colnames(pcs_right),"_right", sep ="")
   
   pcs_combined <- cbind(pcs_left,pcs_right)
-  colnames(pcs_combined) <- c("PC1_left","PC2_left","PC3_left","PC1_right","PC2_right","PC3_right")
+  #colnames(pcs_combined) <- c("PC1_left","PC2_left","PC3_left","PC1_right","PC2_right","PC3_right")
   
   ## combine data with Pcs
   ActivityName <- dat$ActivityName[dat$Wrist_Location=="left"]
   movelet.dat <- data.frame(pcs_combined, ActivityName)
+  movelet.dat$ActivityName <- gsub(" ", "_", movelet.dat$ActivityName)
+  return(movelet.dat)
+}
+
+run_pca_dominant_hand = function(dat, dominant_hand = NULL)
+{
+  dat$Activitylabel<-match(dat$ActivityName,unique(dat$ActivityName))
+  
+  #convert time series and reorder data by time
+  dat$timestamp<-substr(dat$activity_timestamp,12,23)
+  dat$time<- as.numeric(lubridate::hms(dat$timestamp))
+  dat <- dat[sort.int(dat$time, index.return = TRUE)$ix, ]
+  dat$time<-dat$time-dat$time[1]
+  
+  ## Relabel names for wrist location
+  dat$Wrist_Location <- ifelse(dat$Wrist_Location =="right     ","right","left")
+  
+  ## remove duplicate left and right wrist to create balance data
+  dat$Wrist_Location2 <- ifelse(dat$Wrist_Location == "left", 0, 1)
+  keep_idx <- c()
+  diff_time <- diff(dat$time)
+  diff_wrist <- diff(dat$Wrist_Location2)
+  
+  for (i in 1:length(diff_time)){
+    if (diff_time[i] <= 0.01 & diff_wrist[i] != 0)
+    {
+      keep_idx = c(keep_idx, i, i + 1) 
+    }
+    i = i + 2
+  }
+  dat <- dat[keep_idx, ]
+  
+  if (dominant_hand == "left"){
+  ## extract 6 pcs for the left hand
+  vars_left <- dat[dat$Wrist_Location=="left",
+                   c("accel_x_coord","accel_y_coord","accel_z_coord",
+                     "rotate_x_coord","rotate_y_coord", "rotate_z_coord",
+                     "gravity_x_coord","gravity_z_coord","gravity_y_coord",
+                     "magneto_x_coord","magneto_y_coord","magneto_z_coord",
+                     "attitude_x_coord","attitude_y_coord","attitude_z_coord")]
+  varsleft.pca <- prcomp(vars_left, center=TRUE, scale.=TRUE)
+  #summary(varsleft.pca)
+  pcs <- varsleft.pca$x[,1:6]
+  } else {
+  ## extract 6 pcs for the right hand
+  vars_right <- dat[dat$Wrist_Location=="right",
+                    c("accel_x_coord","accel_y_coord","accel_z_coord",
+                      "rotate_x_coord","rotate_y_coord", "rotate_z_coord",
+                      "gravity_x_coord","gravity_z_coord","gravity_y_coord",
+                      "magneto_x_coord","magneto_y_coord","magneto_z_coord",
+                      "attitude_x_coord","attitude_y_coord","attitude_z_coord")]
+  varsright.pca <- prcomp(vars_right, center=TRUE, scale.=TRUE)
+  #summary(varsright.pca)
+  pcs <- varsright.pca$x[,1:6]
+  }
+  #pcs_combined <- cbind(pcs_left,pcs_right)
+  #colnames(pcs_combined) <- c("PC1_left","PC2_left","PC3_left","PC1_right","PC2_right","PC3_right")
+  
+  ## combine data with Pcs
+  ActivityName <- dat$ActivityName[dat$Wrist_Location== dominant_hand]
+  movelet.dat <- data.frame(pcs, ActivityName)
   movelet.dat$ActivityName <- gsub(" ", "_", movelet.dat$ActivityName)
   return(movelet.dat)
 }
@@ -109,7 +172,7 @@ Movelet_Create2=function(FROM, TO, DATA, ChapName, n_axes, Length=NULL)
 }  
 
 ## modify movelet_dist
-Movelet_Dist2=function(Chapter, Unlabeled, index=FALSE)
+Movelet_Dist2=function(Chapter, Unlabeled, n_axes = NULL, index=FALSE)
 {
   # Check if the class of "Chapter" is MvltChap
   if(class(Chapter)!="MvltChap"){stop("Please use appropriate object for Chapter")}
@@ -125,17 +188,51 @@ Movelet_Dist2=function(Chapter, Unlabeled, index=FALSE)
   
   N_Sample=Unlabeled_Movelets$MvltNum	# number of unlabeled movelets
   Distance=array(0,c(N_Sample,N_Chapter))
-  for (i in 1:N_Chapter)
-  {
-    Dist1=sqrt(apply((t(t(Unlabeled_Movelets$Movelet$AX1)-Chapter$Movelet$AX1[i,]))^2,1,sum))
-    Dist2=sqrt(apply((t(t(Unlabeled_Movelets$Movelet$AX2)-Chapter$Movelet$AX2[i,]))^2,1,sum))
-    Dist3=sqrt(apply((t(t(Unlabeled_Movelets$Movelet$AX3)-Chapter$Movelet$AX3[i,]))^2,1,sum))
-    Dist4=sqrt(apply((t(t(Unlabeled_Movelets$Movelet$AX4)-Chapter$Movelet$AX4[i,]))^2,1,sum))
-    Dist5=sqrt(apply((t(t(Unlabeled_Movelets$Movelet$AX5)-Chapter$Movelet$AX5[i,]))^2,1,sum))
-    Dist6=sqrt(apply((t(t(Unlabeled_Movelets$Movelet$AX6)-Chapter$Movelet$AX6[i,]))^2,1,sum))
-    Dist=(Dist1+Dist2+Dist3+Dist4+Dist5+Dist6)/6
-    Distance[,i]=Dist
-  }
+  
+  if (n_axes == 6){
+    for (i in 1:N_Chapter)
+    {
+      Dist1=sqrt(apply((t(t(Unlabeled_Movelets$Movelet$AX1)-Chapter$Movelet$AX1[i,]))^2,1,sum))
+      Dist2=sqrt(apply((t(t(Unlabeled_Movelets$Movelet$AX2)-Chapter$Movelet$AX2[i,]))^2,1,sum))
+      Dist3=sqrt(apply((t(t(Unlabeled_Movelets$Movelet$AX3)-Chapter$Movelet$AX3[i,]))^2,1,sum))
+      Dist4=sqrt(apply((t(t(Unlabeled_Movelets$Movelet$AX4)-Chapter$Movelet$AX4[i,]))^2,1,sum))
+      Dist5=sqrt(apply((t(t(Unlabeled_Movelets$Movelet$AX5)-Chapter$Movelet$AX5[i,]))^2,1,sum))
+      Dist6=sqrt(apply((t(t(Unlabeled_Movelets$Movelet$AX6)-Chapter$Movelet$AX6[i,]))^2,1,sum))
+      Dist=(Dist1+Dist2+Dist3+Dist4+Dist5+Dist6)/6
+      Distance[,i]=Dist
+    }
+  } else if (n_axes == 8){
+    for (i in 1:N_Chapter)
+    {
+      Dist1=sqrt(apply((t(t(Unlabeled_Movelets$Movelet$AX1)-Chapter$Movelet$AX1[i,]))^2,1,sum))
+      Dist2=sqrt(apply((t(t(Unlabeled_Movelets$Movelet$AX2)-Chapter$Movelet$AX2[i,]))^2,1,sum))
+      Dist3=sqrt(apply((t(t(Unlabeled_Movelets$Movelet$AX3)-Chapter$Movelet$AX3[i,]))^2,1,sum))
+      Dist4=sqrt(apply((t(t(Unlabeled_Movelets$Movelet$AX4)-Chapter$Movelet$AX4[i,]))^2,1,sum))
+      Dist5=sqrt(apply((t(t(Unlabeled_Movelets$Movelet$AX5)-Chapter$Movelet$AX5[i,]))^2,1,sum))
+      Dist6=sqrt(apply((t(t(Unlabeled_Movelets$Movelet$AX6)-Chapter$Movelet$AX6[i,]))^2,1,sum))
+      Dist7=sqrt(apply((t(t(Unlabeled_Movelets$Movelet$AX7)-Chapter$Movelet$AX7[i,]))^2,1,sum))
+      Dist8=sqrt(apply((t(t(Unlabeled_Movelets$Movelet$AX8)-Chapter$Movelet$AX8[i,]))^2,1,sum))
+      Dist=(Dist1+Dist2+Dist3+Dist4+Dist5+Dist6+Dist7+Dist8)/8
+      Distance[,i]=Dist
+    }
+  } else {
+    for (i in 1:N_Chapter)
+    {
+      Dist1=sqrt(apply((t(t(Unlabeled_Movelets$Movelet$AX1)-Chapter$Movelet$AX1[i,]))^2,1,sum))
+      Dist2=sqrt(apply((t(t(Unlabeled_Movelets$Movelet$AX2)-Chapter$Movelet$AX2[i,]))^2,1,sum))
+      Dist3=sqrt(apply((t(t(Unlabeled_Movelets$Movelet$AX3)-Chapter$Movelet$AX3[i,]))^2,1,sum))
+      Dist4=sqrt(apply((t(t(Unlabeled_Movelets$Movelet$AX4)-Chapter$Movelet$AX4[i,]))^2,1,sum))
+      Dist5=sqrt(apply((t(t(Unlabeled_Movelets$Movelet$AX5)-Chapter$Movelet$AX5[i,]))^2,1,sum))
+      Dist6=sqrt(apply((t(t(Unlabeled_Movelets$Movelet$AX6)-Chapter$Movelet$AX6[i,]))^2,1,sum))
+      Dist7=sqrt(apply((t(t(Unlabeled_Movelets$Movelet$AX7)-Chapter$Movelet$AX7[i,]))^2,1,sum))
+      Dist8=sqrt(apply((t(t(Unlabeled_Movelets$Movelet$AX8)-Chapter$Movelet$AX8[i,]))^2,1,sum))
+      Dist9=sqrt(apply((t(t(Unlabeled_Movelets$Movelet$AX9)-Chapter$Movelet$AX9[i,]))^2,1,sum))
+      Dist10=sqrt(apply((t(t(Unlabeled_Movelets$Movelet$AX10)-Chapter$Movelet$AX10[i,]))^2,1,sum))
+      Dist=(Dist1+Dist2+Dist3+Dist4+Dist5+Dist6+Dist7+Dist8Dist9+Dist10)/10
+      Distance[,i]=Dist
+    }
+  } #n_axes = 10
+    
   Result=array(0,c(2,N_Sample))
   Result[1,]=apply(Distance,1,which.min)
   Result[2,]=apply(Distance,1,min)
@@ -148,14 +245,14 @@ Movelet_Dist2=function(Chapter, Unlabeled, index=FALSE)
   }
 }
 
-Movelet_Pred2=function(x,Act.Names,vote=FALSE)
+Movelet_Pred2=function(x,Act.Names,vote=FALSE, n_axes = NULL)
 {
   Ch.Names = paste("Ch.", Act.Names, ".",x$Subject,sep="")
   Distance = c()
   Length=get(Ch.Names[1])$Length
   for(i in 1:length(Act.Names))
   {
-    Distance = cbind(Distance, Movelet_Dist2(get(Ch.Names[i]),x))
+    Distance = cbind(Distance, Movelet_Dist2(get(Ch.Names[i]),x, n_axes = n_axes))
   }
   
   Distance=as.data.frame(Distance)
@@ -193,22 +290,23 @@ eval_prediction = function(test.movelet.dat, pred, train_control, test_control, 
   ## n_control_acts is the number of test activities that are not med-taking
   temp <- data.frame(cbind(test.movelet.dat$Label[1:length(pred$Pred2)], pred$Pred2, 
                            pred$Pred))
-  colnames(temp) <- c("Label","Pred","Pred_num")
+  colnames(temp) <- c("True","Pred","Pred_num")
   temp$Pred2 <- factor(ifelse(temp$Pred %in% train_control, "Not Med Taking","Med Taking"))
   temp$Pred2_num <- ifelse(temp$Pred2 =="Not Med Taking",2,1)
-  true <- rle(as.character(temp$Label))
-  med_taking_start_idx <- (cumsum(true$lengths)+1)[length(test_control):length(true$lengths)]
-  med_session <- length(med_taking_start_idx) -1 
+  true <- rle(as.character(temp$True))
+  med_taking_start_idx <- cumsum(true$lengths)[(grep("Med_Taking",true$values)-1)] + 1
+  #med_taking_start_idx <- c(med_taking_start_idx,cumsum(true$lengths)[length(true$lengths)])
+  med_session <- length(med_taking_start_idx) 
   med_length <- true$lengths[grep("Med_Taking",true$values)]
   
-  cut_off <- seq(0.50,0.75,0.05)
+  cut_off <- seq(0.50,0.9,0.05)
   correct_med_pred <- c()
   for(j in 1:length(cut_off)){
     ## define cut off
-    cut_off_median <- median(cut_off[j]*true$lengths[(length(test_control)+1):length(true$lengths)])
+    cut_off_median <- median(cut_off[j]*med_length)
     pred_res <- c()
-    for(i in 1:(length(med_taking_start_idx)-1)){
-      if(length(which(temp$Pred2[med_taking_start_idx[i]:med_taking_start_idx[i+1]] == "Med Taking")) > cut_off_median){
+    for(i in 1:(length(med_taking_start_idx))){
+      if(length(which(temp$Pred2[med_taking_start_idx[i]:(med_taking_start_idx[i] + med_length[i])] == "Med Taking")) > cut_off_median){
         pred_res <- c(pred_res,"Med-taking session")
       } else pred_res <- c(pred_res,"Not a full med-taking session")
     }
