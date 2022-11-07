@@ -65,7 +65,7 @@ label.ses = function(med.ses){
 train_control = c("Walk_train", "Wash_Hands","Look_around_in_bag_or_purse")
 train.label =  c(label.ses(med.ses), train_control)
 
-message("Preparing Training data")
+message("Preparing Training data...")
 movelet.dat <- Acceleration_Create2(pca.dat,subjectName= dat$PatientID[1],
                                     n_axes = n_axes,frequency=50) # 50 obs per second
 
@@ -85,12 +85,13 @@ test.dat <- subset(pca.dat, ActivityName %in% c(test_control,
 test.movelet.dat <- Acceleration_Create2(test.dat,subjectName=dat$PatientID[1],n_axes = n_axes,frequency=50) 
 
 #expand the prediction activity labels to include all trained chapters
-message("Running prediction")
-pred <- Movelet_Pred2(test.movelet.dat, Act.Names=train.label, n_axes=n_axes, vote=TRUE)
+message("Running prediction...")
+system.time(pred <- Movelet_Pred2(test.movelet.dat, Act.Names=train.label, n_axes=n_axes, vote=TRUE))
 pred$Pred2 <- train.label[pred$Pred]
 
 ## Evaluate prediction
-pred$test <- eval_prediction(test.movelet.dat, pred, train_control, test_control, smoothing = smoothing)
+message("Evaluating prediction...")
+system.time(pred$test <- eval_prediction(test.movelet.dat, pred, train_control, test_control, smoothing = smoothing))
 
 # Save it
 saveRDS(pred, file = sprintf("Results/%s_pred_pca-%s_npc-%s_smooth-%s_ses-%s.rds", 
@@ -99,4 +100,4 @@ saveRDS(pred, file = sprintf("Results/%s_pred_pca-%s_npc-%s_smooth-%s_ses-%s.rds
                               ifelse(dominant, 6, npc),
                               smoothing,
                               med.ses))
-message("Prediction saved")
+message("Prediction saved.")

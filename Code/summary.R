@@ -1,9 +1,12 @@
 # Summary functions
 
-loadPrediction = function(patient, ses, smooth){
+load_prediction = function(patient, pca, npc, smooth, ses){
   # Loads Prediction Objects (nested lists)
-  path = ifelse(smooth, "Results/post-smooth", "Results/pre-smooth")
-  resPred = readRDS(sprintf("%s/patient_%s_pred_ses-%s.rds", path, patient, ses))
+  args = ls()
+  args = lapply(args, function(x) gsub(" ", "", get(x), fixed = TRUE))
+  trim = function(x) gsub(" ", "", x)
+  resPred = readRDS(sprintf("Results/patient_%s_pred_pca-%s_npc-%s_smooth-%s_ses-%s.rds", 
+                            trim(patient), trim(pca), trim(npc), trim(smooth), trim(ses)))
   return(resPred)
 }
 

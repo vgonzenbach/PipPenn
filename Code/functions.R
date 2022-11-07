@@ -184,7 +184,7 @@ Movelet_Dist2=function(Chapter, Unlabeled, n_axes = NULL, index=FALSE)
   
   # decompose unlabeled timeseries into movelets
   Unlabeled_Movelets=Movelet_Create2(FROM=1, TO=N, DATA=Unlabeled, 
-                                     Length=Length, n_axes = 6, ChapName="Unlabeled")
+                                     Length=Length, n_axes = n_axes, ChapName="Unlabeled")
   
   N_Sample=Unlabeled_Movelets$MvltNum	# number of unlabeled movelets
   Distance=array(0,c(N_Sample,N_Chapter))
@@ -228,7 +228,7 @@ Movelet_Dist2=function(Chapter, Unlabeled, n_axes = NULL, index=FALSE)
       Dist8=sqrt(apply((t(t(Unlabeled_Movelets$Movelet$AX8)-Chapter$Movelet$AX8[i,]))^2,1,sum))
       Dist9=sqrt(apply((t(t(Unlabeled_Movelets$Movelet$AX9)-Chapter$Movelet$AX9[i,]))^2,1,sum))
       Dist10=sqrt(apply((t(t(Unlabeled_Movelets$Movelet$AX10)-Chapter$Movelet$AX10[i,]))^2,1,sum))
-      Dist=(Dist1+Dist2+Dist3+Dist4+Dist5+Dist6+Dist7+Dist8Dist9+Dist10)/10
+      Dist=(Dist1+Dist2+Dist3+Dist4+Dist5+Dist6+Dist7+Dist8+Dist9+Dist10)/10
       Distance[,i]=Dist
     }
   } #n_axes = 10
