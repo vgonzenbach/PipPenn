@@ -8,3 +8,4 @@ Data/
 logs
 Code/plots_*
 *.DS_Store
+.Rproj.user
