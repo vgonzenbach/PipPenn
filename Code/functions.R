@@ -187,51 +187,22 @@ Movelet_Dist2=function(Chapter, Unlabeled, n_axes = NULL, index=FALSE)
                                      Length=Length, n_axes = n_axes, ChapName="Unlabeled")
   
   N_Sample=Unlabeled_Movelets$MvltNum	# number of unlabeled movelets
-  Distance=array(0,c(N_Sample,N_Chapter))
+  Distance=array(NA,c(N_Sample,N_Chapter))
   
-  if (n_axes == 6){
-    for (i in 1:N_Chapter)
-    {
-      Dist1=sqrt(apply((t(t(Unlabeled_Movelets$Movelet$AX1)-Chapter$Movelet$AX1[i,]))^2,1,sum))
-      Dist2=sqrt(apply((t(t(Unlabeled_Movelets$Movelet$AX2)-Chapter$Movelet$AX2[i,]))^2,1,sum))
-      Dist3=sqrt(apply((t(t(Unlabeled_Movelets$Movelet$AX3)-Chapter$Movelet$AX3[i,]))^2,1,sum))
-      Dist4=sqrt(apply((t(t(Unlabeled_Movelets$Movelet$AX4)-Chapter$Movelet$AX4[i,]))^2,1,sum))
-      Dist5=sqrt(apply((t(t(Unlabeled_Movelets$Movelet$AX5)-Chapter$Movelet$AX5[i,]))^2,1,sum))
-      Dist6=sqrt(apply((t(t(Unlabeled_Movelets$Movelet$AX6)-Chapter$Movelet$AX6[i,]))^2,1,sum))
-      Dist=(Dist1+Dist2+Dist3+Dist4+Dist5+Dist6)/6
-      Distance[,i]=Dist
-    }
-  } else if (n_axes == 8){
-    for (i in 1:N_Chapter)
-    {
-      Dist1=sqrt(apply((t(t(Unlabeled_Movelets$Movelet$AX1)-Chapter$Movelet$AX1[i,]))^2,1,sum))
-      Dist2=sqrt(apply((t(t(Unlabeled_Movelets$Movelet$AX2)-Chapter$Movelet$AX2[i,]))^2,1,sum))
-      Dist3=sqrt(apply((t(t(Unlabeled_Movelets$Movelet$AX3)-Chapter$Movelet$AX3[i,]))^2,1,sum))
-      Dist4=sqrt(apply((t(t(Unlabeled_Movelets$Movelet$AX4)-Chapter$Movelet$AX4[i,]))^2,1,sum))
-      Dist5=sqrt(apply((t(t(Unlabeled_Movelets$Movelet$AX5)-Chapter$Movelet$AX5[i,]))^2,1,sum))
-      Dist6=sqrt(apply((t(t(Unlabeled_Movelets$Movelet$AX6)-Chapter$Movelet$AX6[i,]))^2,1,sum))
-      Dist7=sqrt(apply((t(t(Unlabeled_Movelets$Movelet$AX7)-Chapter$Movelet$AX7[i,]))^2,1,sum))
-      Dist8=sqrt(apply((t(t(Unlabeled_Movelets$Movelet$AX8)-Chapter$Movelet$AX8[i,]))^2,1,sum))
-      Dist=(Dist1+Dist2+Dist3+Dist4+Dist5+Dist6+Dist7+Dist8)/8
-      Distance[,i]=Dist
-    }
-  } else {
-    for (i in 1:N_Chapter)
-    {
-      Dist1=sqrt(apply((t(t(Unlabeled_Movelets$Movelet$AX1)-Chapter$Movelet$AX1[i,]))^2,1,sum))
-      Dist2=sqrt(apply((t(t(Unlabeled_Movelets$Movelet$AX2)-Chapter$Movelet$AX2[i,]))^2,1,sum))
-      Dist3=sqrt(apply((t(t(Unlabeled_Movelets$Movelet$AX3)-Chapter$Movelet$AX3[i,]))^2,1,sum))
-      Dist4=sqrt(apply((t(t(Unlabeled_Movelets$Movelet$AX4)-Chapter$Movelet$AX4[i,]))^2,1,sum))
-      Dist5=sqrt(apply((t(t(Unlabeled_Movelets$Movelet$AX5)-Chapter$Movelet$AX5[i,]))^2,1,sum))
-      Dist6=sqrt(apply((t(t(Unlabeled_Movelets$Movelet$AX6)-Chapter$Movelet$AX6[i,]))^2,1,sum))
-      Dist7=sqrt(apply((t(t(Unlabeled_Movelets$Movelet$AX7)-Chapter$Movelet$AX7[i,]))^2,1,sum))
-      Dist8=sqrt(apply((t(t(Unlabeled_Movelets$Movelet$AX8)-Chapter$Movelet$AX8[i,]))^2,1,sum))
-      Dist9=sqrt(apply((t(t(Unlabeled_Movelets$Movelet$AX9)-Chapter$Movelet$AX9[i,]))^2,1,sum))
-      Dist10=sqrt(apply((t(t(Unlabeled_Movelets$Movelet$AX10)-Chapter$Movelet$AX10[i,]))^2,1,sum))
-      Dist=(Dist1+Dist2+Dist3+Dist4+Dist5+Dist6+Dist7+Dist8+Dist9+Dist10)/10
-      Distance[,i]=Dist
-    }
-  } #n_axes = 10
+   #' get distance between unlabeled movelet and chapters for a given axis
+   #' @param axis
+   #' @return a single number
+  get_dist <- function(axis, i){
+      (t( t(Unlabeled_Movelets$Movelet[[ axis ]]) - Chapter$Movelet[[ axis ]][ i ,]))^2 |> 
+        apply(1, sum) |> 
+        sqrt()
+  }
+  for (i in seq_len(N_Chapter)){ 
+    Distance[,i] <- seq_len(n_axes) |>
+      ## use function to calculate distance for all axes for ith Chapter 
+      lapply(get_dist, i = i) |>
+      Reduce(f = '+') / n_axes # average
+  }
     
   Result=array(0,c(2,N_Sample))
   Result[1,]=apply(Distance,1,which.min)
