@@ -1,20 +1,23 @@
-source("Code/functions.R")
-source("Code/summary.R")
+source(here::here("Code/functions.R"))
+source(here::here("Code/summary.R"))
 library(dplyr)
 
-setwd(rprojroot::find_rstudio_root_file()) 
+
+
 make_metrics_df = function(params){
   
   df = expand.grid(params)
+  df$pca = as.character(df$pca)
   colnames(df) = names(params)
   
   # Exclude non-existent params combinations
-  df = df[( (df$pca == 'dominanthand' | df$pca == 'nondominanthand') & df$npc == 6) | (df$pca == 'bothhands' & df$npc %in% c(3,4,5)),  ]
+  df = df[( (df$pca == 'dominanthand' | df$pca == 'nondominanthand') & df$npc == 6) | (df$pca == 'bothhands' & df$npc %in% c(3,4,5, 6, 7, 8, 9, 10)),  ]
   
   # for each patient, ses combination get metrics from confusion matrix + percent_correct at each cut_off
   metrics_df = df |> apply(1, function(x){
-    pred = load_prediction(patient = x["patient"], pca = x['pca'], npc = x['npc'], ses = x["session"], smooth = x["smooth"])
-    row = get_metrics(pred$test$Accuracy$table)
+    pred_path = get_prediction_path(patient = x["patient"], pca = as.character(x['pca']), npc = x['npc'], ses = x["session"], smooth = x["smooth"])
+    pred = readRDS(pred_path)
+    row = c(pred_path, get_metrics(pred$test$Accuracy$table))
     
     percent_correct = mutate(pred$test$Session, percent_correct = correct_med_pred / med_session)$percent_correct
     names(percent_correct) = paste0("correct_at_",pred$test$Session$cut_off)
@@ -32,7 +35,7 @@ make_metrics_df = function(params){
 params = list(
   patient = c(19, 20, 28, 32, 40, 52, 75, 86, 88, 89),
   pca = c('bothhands', 'dominanthand', 'nondominanthand'),
-  npc = c(3, 4, 5, 6),
+  npc = c(3, 4, 5, 6, 7, 8, 9, 10),
   smooth = c(TRUE, FALSE),
   session = c(5, 6, 8, 9, 11, 12)
 )

@@ -7,7 +7,7 @@ library(caret) |> suppressMessages()
 library(tvR) |> suppressMessages()
 library(argparser) |> suppressMessages()
 
-#options(error = quote({dump.frames(to.file = TRUE); q(status = 1)}))
+options(error = quote({dump.frames(to.file = TRUE); q(status = 1)}))
 # Read in argument
 p <- arg_parser("Run Movelet Prediction for Apple Watch Medication-Taking", hide.opts = FALSE)
 p <- add_argument(p, "data", help = "Subject .rds file")

@@ -1,13 +1,13 @@
 # Summary functions
 
-load_prediction = function(patient, pca, npc, smooth, ses){
+get_prediction_path = function(patient, pca, npc, smooth, ses){
   # Loads Prediction Objects (nested lists)
   args = ls()
   args = lapply(args, function(x) gsub(" ", "", get(x), fixed = TRUE))
   trim = function(x) gsub(" ", "", x)
-  resPred = readRDS(sprintf("Results/patient_%s_pred_pca-%s_npc-%s_smooth-%s_ses-%s.rds", 
-                            trim(patient), trim(pca), trim(npc), trim(smooth), trim(ses)))
-  return(resPred)
+  pred_path = sprintf("Results/patient_%s_pred_pca-%s_npc-%s_smooth-%s_ses-%s.rds", 
+                      trim(patient), trim(pca), trim(npc), trim(smooth), trim(ses))
+  return(pred_path)
 }
 
 get_metrics = function(table){

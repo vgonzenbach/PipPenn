@@ -4,11 +4,14 @@ author: "Virgilio Gonzenbach"
 date: "10/7/2021"
 output:
   html_document: 
+    df_print: paged
     toc: true
     toc_float: true
     theme: spacelab
     code_folding: hide
 ---
+
+This notebook contains plots for the Apple Watch Movelet project comparing the effect of setting different run-time parameter combinations (i.e. number of PCs, including both hands, dominant hand only, or nondominant hand only, number of med-taking sessions to include in the training set) on various prediction metrics.  
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(fig.align = "center",
@@ -53,10 +56,10 @@ metrics_df %>%
   facet_wrap(~smooth) + 
   theme_bw() + theme(plot.title = element_text(hjust = 0.5)) +
   scale_color_lancet()
-ggsave('figures/npc_boxplot.png', dpi=300)
+#ggsave('figures/npc_boxplot.png', dpi=300)
 ```
 
-## Dominant Hand vs Both Hands (w. npc=3)
+## Dominant Hand vs NonDominant Hand vs Both Hands (w. npc=3)
 
 ```{r pca_boxplots}
 metrics_df_for_plot = metrics_df %>% 
@@ -69,7 +72,7 @@ metrics_df_for_plot = metrics_df %>%
 
 metrics_df_for_plot %>% 
   pivot_longer(-c(pca, patient, smooth), names_to = "Metric") %>% 
-  mutate(pca = recode(.$pca, `bothhands` = "Both Hands", `dominanthand` = "Dominant Hand")) %>% 
+  mutate(pca = recode(.$pca, `bothhands` = "Both Hands", `dominanthand` = "Dominant Hand", `nondominanthand` = "Nondominant Hand")) %>% 
   ggplot(aes(x=Metric, y=value, color=pca)) + 
   geom_boxplot() + 
   facet_wrap(~smooth) + 
@@ -79,7 +82,7 @@ metrics_df_for_plot %>%
   
 ```
 
-Testing differences
+Testing differences in metrics (paired T-tests)
 
 ```{r}
 bothhands = metrics_df_for_plot %>% 
@@ -90,13 +93,38 @@ domhand = metrics_df_for_plot %>%
   filter(smooth=='Post-Smoothing', pca=='dominanthand') %>% 
   select(where(is.numeric))
 
-metrics_df_for_plot %>% 
-  filter(smooth=='Post-Smoothing') %>% 
-  group_split(pca)
+nondomhand = metrics_df_for_plot %>% 
+  filter(smooth=='Post-Smoothing', pca=='nondominanthand') %>% 
+  select(where(is.numeric))
 
-res = seq_along(bothhands) %>% lapply(function(i) t.test(domhand[,i], bothhands[,i]))
-names(res) = colnames(domhand)
-res
+dom_vs_both = seq_along(bothhands) %>% 
+  purrr::map(function(i) t.test(pull(domhand, i), # get i-th column
+                                pull(bothhands, i), 
+                                paired = TRUE)) %>% 
+  purrr::map(broom::tidy) %>% 
+  setNames(colnames(bothhands)) %>% 
+  dplyr::bind_rows(.id = 'metric') %>% 
+  tibble::add_column(comparison = "Dominant hand v. Both Hands", .before = 'metric')
+  
+nondom_vs_both = seq_along(bothhands) %>% 
+  purrr::map(function(i) t.test(pull(nondomhand, i), # get i-th column
+                                pull(bothhands, i), 
+                                paired = TRUE)) %>% 
+  purrr::map(broom::tidy) %>% 
+  setNames(colnames(bothhands)) %>% 
+  dplyr::bind_rows(.id = 'metric') %>% 
+  tibble::add_column(comparison = "Nondominant hand v. Both Hands", .before = 'metric')
+
+nondom_vs_dom = seq_along(bothhands) %>% 
+  purrr::map(function(i) t.test(pull(nondomhand, i), # get i-th column
+                                pull(domhand, i), 
+                                paired = TRUE)) %>% 
+  purrr::map(broom::tidy) %>% 
+  setNames(colnames(bothhands)) %>% 
+  dplyr::bind_rows(.id = 'metric') %>% 
+  tibble::add_column(comparison = "Nondominant hand v. Dominant hand", .before = 'metric')
+
+rbind(dom_vs_both, nondom_vs_both, nondom_vs_dom)
 ```
 
 ## Both Hands NPC=3 per hand
@@ -198,7 +226,7 @@ tables %>% flextable::flextable() %>%
   
 ```
 
-### Metrics across traning modes
+### Metrics across training modes
 
 ```{r}
 metrics_df_all_n %>% 
@@ -256,7 +284,7 @@ tables %>% flextable::flextable() %>%
   
 ```
 
-### Metrics across traning modes
+### Metrics across training modes
 
 ```{r}
 metrics_df_all_n %>% 
@@ -273,13 +301,12 @@ metrics_df_all_n %>%
   
 ```
 
-
-## Dominant Hand
+## Both Hands NPC=6
 
 ### Training 1 med session
 
 ```{r}
-metrics_df_long = metrics_df %>% filter(pca == 'dominanthand') %>% group_by(patient, smooth) %>% select(Accuracy, Precision, F1.score, Sensitivity, Specificity) %>% summarize_all(mean) %>% pivot_longer(-c(patient, smooth), names_to = "Metric")
+metrics_df_long = metrics_df %>% filter(pca == 'bothhands', npc==6) %>% group_by(patient, smooth) %>% select(Accuracy, Precision, F1.score, Sensitivity, Specificity) %>% summarize_all(mean) %>% pivot_longer(-c(patient, smooth), names_to = "Metric")
 
 metrics_df_long %>% ggplot(aes(x=Metric, y = value, color=Metric)) + geom_jitter() + geom_boxplot(alpha=0) + facet_wrap(~smooth) + 
   theme_bw() + ggtitle("Summary metrics for Movelet prediction (1 session training)") + theme(plot.title = element_text(hjust = 0.5)) +
@@ -289,6 +316,296 @@ metrics_df_long %>% ggplot(aes(x=Metric, y = value, color=Metric)) + geom_jitter
 ### Metrics across sessions
 
 ```{r results='asis'}
+
+# Prepare table with smoothing
+table1 = metrics_df %>% filter(smooth=="Pre-Smoothing", pca == 'bothhands', npc==6) %>% group_by(session) %>% select(Accuracy, Precision, F1.score, Sensitivity, Specificity) %>% summarize_all(mean)
+
+# Prepare table without smoothing
+table2 = metrics_df %>% filter(smooth=="Post-Smoothing", pca == 'bothhands', npc==6) %>% group_by(session) %>% select(Accuracy, Precision, F1.score, Sensitivity, Specificity) %>% summarize_all(mean) %>% as.data.frame()
+
+# Join tables
+tables = cbind(table1, table2[, -1]) %>% round(2)
+colnames(tables)[2:11] = paste0(colnames(tables)[2:11], rep(c(".T", ".F"), each = 5))
+headers = data.frame(col_keys = colnames(tables), 
+                     from = c("Session", rep(c("Pre-Smoothing", "Post-Smoothing"), each=5)),
+                     names = c("Session", colnames(cbind(table1[-1], table2[, -1])))
+                     )
+# Print table as flextable
+tables %>% flextable::flextable() %>% 
+  set_header_df(mapping = headers, key = "col_keys") %>% 
+  merge_h(part="header") %>% 
+  merge_v(part="header") %>% 
+  theme_vanilla() %>% 
+  width(width = 27, unit = "in") %>% 
+  align(align="center", part="all") %>% 
+  vline(part="header")
+  
+```
+
+### Metrics across training modes
+
+```{r}
+metrics_df_all_n %>% 
+  filter(pca == 'bothhands', npc==6) %>% 
+  group_by(patient, n_train, smooth) %>% 
+  select(Accuracy, Precision, F1.score, Sensitivity, Specificity) %>% 
+  summarize_all(mean) %>% 
+  pivot_longer(-c(patient, n_train, smooth),  names_to = "Metric") %>% 
+  ggplot(aes(x=n_train, y = value, color=as.factor(n_train))) + 
+  geom_jitter() + facet_grid(smooth~Metric) +  geom_boxplot(alpha=0) + 
+  theme_bw() + ggtitle("Summary metrics for Movelet prediction (n session training)") + 
+  theme(plot.title = element_text(hjust = 0.5)) + guides(color=guide_legend(title="N trained med sessions")) + xlab("Train N") +
+  scale_color_lancet() 
+  
+```
+
+## Both Hands NPC=7
+
+### Training 1 med session
+
+```{r}
+metrics_df_long = metrics_df %>% filter(pca == 'bothhands', npc==7) %>% group_by(patient, smooth) %>% select(Accuracy, Precision, F1.score, Sensitivity, Specificity) %>% summarize_all(mean) %>% pivot_longer(-c(patient, smooth), names_to = "Metric")
+
+metrics_df_long %>% ggplot(aes(x=Metric, y = value, color=Metric)) + geom_jitter() + geom_boxplot(alpha=0) + facet_wrap(~smooth) + 
+  theme_bw() + ggtitle("Summary metrics for Movelet prediction (1 session training)") + theme(plot.title = element_text(hjust = 0.5)) +
+  scale_color_d3()
+```
+
+### Metrics across sessions
+
+```{r results='asis'}
+
+# Prepare table with smoothing
+table1 = metrics_df %>% filter(smooth=="Pre-Smoothing", pca == 'bothhands', npc==7) %>% group_by(session) %>% select(Accuracy, Precision, F1.score, Sensitivity, Specificity) %>% summarize_all(mean)
+
+# Prepare table without smoothing
+table2 = metrics_df %>% filter(smooth=="Post-Smoothing", pca == 'bothhands', npc==7) %>% group_by(session) %>% select(Accuracy, Precision, F1.score, Sensitivity, Specificity) %>% summarize_all(mean) %>% as.data.frame()
+
+# Join tables
+tables = cbind(table1, table2[, -1]) %>% round(2)
+colnames(tables)[2:11] = paste0(colnames(tables)[2:11], rep(c(".T", ".F"), each = 5))
+headers = data.frame(col_keys = colnames(tables), 
+                     from = c("Session", rep(c("Pre-Smoothing", "Post-Smoothing"), each=5)),
+                     names = c("Session", colnames(cbind(table1[-1], table2[, -1])))
+                     )
+# Print table as flextable
+tables %>% flextable::flextable() %>% 
+  set_header_df(mapping = headers, key = "col_keys") %>% 
+  merge_h(part="header") %>% 
+  merge_v(part="header") %>% 
+  theme_vanilla() %>% 
+  width(width = 27, unit = "in") %>% 
+  align(align="center", part="all") %>% 
+  vline(part="header")
+  
+```
+
+### Metrics across training modes
+
+```{r}
+metrics_df_all_n %>% 
+  filter(pca == 'bothhands', npc==7) %>% 
+  group_by(patient, n_train, smooth) %>% 
+  select(Accuracy, Precision, F1.score, Sensitivity, Specificity) %>% 
+  summarize_all(mean) %>% 
+  pivot_longer(-c(patient, n_train, smooth),  names_to = "Metric") %>% 
+  ggplot(aes(x=n_train, y = value, color=as.factor(n_train))) + 
+  geom_jitter() + facet_grid(smooth~Metric) +  geom_boxplot(alpha=0) + 
+  theme_bw() + ggtitle("Summary metrics for Movelet prediction (n session training)") + 
+  theme(plot.title = element_text(hjust = 0.5)) + guides(color=guide_legend(title="N trained med sessions")) + xlab("Train N") +
+  scale_color_lancet() 
+  
+```
+
+## Both Hands NPC=8
+
+### Training 1 med session
+
+```{r}
+metrics_df_long = metrics_df %>% filter(pca == 'bothhands', npc==8) %>% group_by(patient, smooth) %>% select(Accuracy, Precision, F1.score, Sensitivity, Specificity) %>% summarize_all(mean) %>% pivot_longer(-c(patient, smooth), names_to = "Metric")
+
+metrics_df_long %>% ggplot(aes(x=Metric, y = value, color=Metric)) + geom_jitter() + geom_boxplot(alpha=0) + facet_wrap(~smooth) + 
+  theme_bw() + ggtitle("Summary metrics for Movelet prediction (1 session training)") + theme(plot.title = element_text(hjust = 0.5)) +
+  scale_color_d3()
+```
+
+### Metrics across sessions
+
+```{r results='asis'}
+
+# Prepare table with smoothing
+table1 = metrics_df %>% filter(smooth=="Pre-Smoothing", pca == 'bothhands', npc==8) %>% group_by(session) %>% select(Accuracy, Precision, F1.score, Sensitivity, Specificity) %>% summarize_all(mean)
+
+# Prepare table without smoothing
+table2 = metrics_df %>% filter(smooth=="Post-Smoothing", pca == 'bothhands', npc==8) %>% group_by(session) %>% select(Accuracy, Precision, F1.score, Sensitivity, Specificity) %>% summarize_all(mean) %>% as.data.frame()
+
+# Join tables
+tables = cbind(table1, table2[, -1]) %>% round(2)
+colnames(tables)[2:11] = paste0(colnames(tables)[2:11], rep(c(".T", ".F"), each = 5))
+headers = data.frame(col_keys = colnames(tables), 
+                     from = c("Session", rep(c("Pre-Smoothing", "Post-Smoothing"), each=5)),
+                     names = c("Session", colnames(cbind(table1[-1], table2[, -1])))
+                     )
+# Print table as flextable
+tables %>% flextable::flextable() %>% 
+  set_header_df(mapping = headers, key = "col_keys") %>% 
+  merge_h(part="header") %>% 
+  merge_v(part="header") %>% 
+  theme_vanilla() %>% 
+  width(width = 27, unit = "in") %>% 
+  align(align="center", part="all") %>% 
+  vline(part="header")
+  
+```
+
+### Metrics across training modes
+
+```{r}
+metrics_df_all_n %>% 
+  filter(pca == 'bothhands', npc==8) %>% 
+  group_by(patient, n_train, smooth) %>% 
+  select(Accuracy, Precision, F1.score, Sensitivity, Specificity) %>% 
+  summarize_all(mean) %>% 
+  pivot_longer(-c(patient, n_train, smooth),  names_to = "Metric") %>% 
+  ggplot(aes(x=n_train, y = value, color=as.factor(n_train))) + 
+  geom_jitter() + facet_grid(smooth~Metric) +  geom_boxplot(alpha=0) + 
+  theme_bw() + ggtitle("Summary metrics for Movelet prediction (n session training)") + 
+  theme(plot.title = element_text(hjust = 0.5)) + guides(color=guide_legend(title="N trained med sessions")) + xlab("Train N") +
+  scale_color_lancet() 
+  
+```
+
+## Both Hands NPC=9
+
+### Training 1 med session
+
+```{r}
+metrics_df_long = metrics_df %>% filter(pca == 'bothhands', npc==9) %>% group_by(patient, smooth) %>% select(Accuracy, Precision, F1.score, Sensitivity, Specificity) %>% summarize_all(mean) %>% pivot_longer(-c(patient, smooth), names_to = "Metric")
+
+metrics_df_long %>% ggplot(aes(x=Metric, y = value, color=Metric)) + geom_jitter() + geom_boxplot(alpha=0) + facet_wrap(~smooth) + 
+  theme_bw() + ggtitle("Summary metrics for Movelet prediction (1 session training)") + theme(plot.title = element_text(hjust = 0.5)) +
+  scale_color_d3()
+```
+
+### Metrics across sessions
+
+```{r results='asis'}
+
+# Prepare table with smoothing
+table1 = metrics_df %>% filter(smooth=="Pre-Smoothing", pca == 'bothhands', npc==9) %>% group_by(session) %>% select(Accuracy, Precision, F1.score, Sensitivity, Specificity) %>% summarize_all(mean)
+
+# Prepare table without smoothing
+table2 = metrics_df %>% filter(smooth=="Post-Smoothing", pca == 'bothhands', npc==9) %>% group_by(session) %>% select(Accuracy, Precision, F1.score, Sensitivity, Specificity) %>% summarize_all(mean) %>% as.data.frame()
+
+# Join tables
+tables = cbind(table1, table2[, -1]) %>% round(2)
+colnames(tables)[2:11] = paste0(colnames(tables)[2:11], rep(c(".T", ".F"), each = 5))
+headers = data.frame(col_keys = colnames(tables), 
+                     from = c("Session", rep(c("Pre-Smoothing", "Post-Smoothing"), each=5)),
+                     names = c("Session", colnames(cbind(table1[-1], table2[, -1])))
+                     )
+# Print table as flextable
+tables %>% flextable::flextable() %>% 
+  set_header_df(mapping = headers, key = "col_keys") %>% 
+  merge_h(part="header") %>% 
+  merge_v(part="header") %>% 
+  theme_vanilla() %>% 
+  width(width = 27, unit = "in") %>% 
+  align(align="center", part="all") %>% 
+  vline(part="header")
+  
+```
+
+### Metrics across training modes
+
+```{r}
+metrics_df_all_n %>% 
+  filter(pca == 'bothhands', npc==9) %>% 
+  group_by(patient, n_train, smooth) %>% 
+  select(Accuracy, Precision, F1.score, Sensitivity, Specificity) %>% 
+  summarize_all(mean) %>% 
+  pivot_longer(-c(patient, n_train, smooth),  names_to = "Metric") %>% 
+  ggplot(aes(x=n_train, y = value, color=as.factor(n_train))) + 
+  geom_jitter() + facet_grid(smooth~Metric) +  geom_boxplot(alpha=0) + 
+  theme_bw() + ggtitle("Summary metrics for Movelet prediction (n session training)") + 
+  theme(plot.title = element_text(hjust = 0.5)) + guides(color=guide_legend(title="N trained med sessions")) + xlab("Train N") +
+  scale_color_lancet() 
+  
+```
+
+## Both Hands NPC=10
+
+### Training 1 med session
+
+```{r}
+metrics_df_long = metrics_df %>% filter(pca == 'bothhands', npc==10) %>% group_by(patient, smooth) %>% select(Accuracy, Precision, F1.score, Sensitivity, Specificity) %>% summarize_all(mean) %>% pivot_longer(-c(patient, smooth), names_to = "Metric")
+
+metrics_df_long %>% ggplot(aes(x=Metric, y = value, color=Metric)) + geom_jitter() + geom_boxplot(alpha=0) + facet_wrap(~smooth) + 
+  theme_bw() + ggtitle("Summary metrics for Movelet prediction (1 session training)") + theme(plot.title = element_text(hjust = 0.5)) +
+  scale_color_d3()
+```
+
+### Metrics across sessions
+
+```{r results='asis'}
+
+# Prepare table with smoothing
+table1 = metrics_df %>% filter(smooth=="Pre-Smoothing", pca == 'bothhands', npc==10) %>% group_by(session) %>% select(Accuracy, Precision, F1.score, Sensitivity, Specificity) %>% summarize_all(mean)
+
+# Prepare table without smoothing
+table2 = metrics_df %>% filter(smooth=="Post-Smoothing", pca == 'bothhands', npc==10) %>% group_by(session) %>% select(Accuracy, Precision, F1.score, Sensitivity, Specificity) %>% summarize_all(mean) %>% as.data.frame()
+
+# Join tables
+tables = cbind(table1, table2[, -1]) %>% round(2)
+colnames(tables)[2:11] = paste0(colnames(tables)[2:11], rep(c(".T", ".F"), each = 5))
+headers = data.frame(col_keys = colnames(tables), 
+                     from = c("Session", rep(c("Pre-Smoothing", "Post-Smoothing"), each=5)),
+                     names = c("Session", colnames(cbind(table1[-1], table2[, -1])))
+                     )
+# Print table as flextable
+tables %>% flextable::flextable() %>% 
+  set_header_df(mapping = headers, key = "col_keys") %>% 
+  merge_h(part="header") %>% 
+  merge_v(part="header") %>% 
+  theme_vanilla() %>% 
+  width(width = 27, unit = "in") %>% 
+  align(align="center", part="all") %>% 
+  vline(part="header")
+  
+```
+
+### Metrics across training modes
+
+```{r}
+metrics_df_all_n %>% 
+  filter(pca == 'bothhands', npc==10) %>% 
+  group_by(patient, n_train, smooth) %>% 
+  select(Accuracy, Precision, F1.score, Sensitivity, Specificity) %>% 
+  summarize_all(mean) %>% 
+  pivot_longer(-c(patient, n_train, smooth),  names_to = "Metric") %>% 
+  ggplot(aes(x=n_train, y = value, color=as.factor(n_train))) + 
+  geom_jitter() + facet_grid(smooth~Metric) +  geom_boxplot(alpha=0) + 
+  theme_bw() + ggtitle("Summary metrics for Movelet prediction (n session training)") + 
+  theme(plot.title = element_text(hjust = 0.5)) + guides(color=guide_legend(title="N trained med sessions")) + xlab("Train N") +
+  scale_color_lancet() 
+  
+```
+
+## Dominant Hand
+
+### Training 1 med session
+
+```{r domhand_n1}
+metrics_df_long = metrics_df %>% filter(pca == 'dominanthand') %>% group_by(patient, smooth) %>% select(Accuracy, Precision, F1.score, Sensitivity, Specificity) %>% summarize_all(mean) %>% pivot_longer(-c(patient, smooth), names_to = "Metric")
+
+metrics_df_long %>% ggplot(aes(x=Metric, y = value, color=Metric)) + geom_jitter() + geom_boxplot(alpha=0) + facet_wrap(~smooth) + 
+  theme_bw() + ggtitle("Summary metrics for Movelet prediction (1 session training)") + theme(plot.title = element_text(hjust = 0.5)) +
+  scale_color_d3()
+```
+
+### Metrics across sessions
+
+```{r domhand_per_ses,results='asis'}
 
 # Prepare table with smoothing
 table1 = metrics_df %>% filter(smooth=="Pre-Smoothing", pca == 'dominanthand') %>% group_by(session) %>% select(Accuracy, Precision, F1.score, Sensitivity, Specificity) %>% summarize_all(mean)
@@ -315,9 +632,9 @@ tables %>% flextable::flextable() %>%
   
 ```
 
-### Metrics across traning modes
+### Metrics across training modes
 
-```{r}
+```{r domhand_per_ntrain}
 metrics_df_all_n %>% 
   filter(pca == 'dominanthand') %>% 
   group_by(patient, n_train, smooth) %>% 
@@ -331,3 +648,64 @@ metrics_df_all_n %>%
   scale_color_lancet() 
   
 ```
+
+## NonDominant Hand
+
+### Training 1 med session
+
+```{r nondomhand_n1}
+metrics_df_long = metrics_df %>% filter(pca == 'nondominanthand') %>% group_by(patient, smooth) %>% select(Accuracy, Precision, F1.score, Sensitivity, Specificity) %>% summarize_all(mean) %>% pivot_longer(-c(patient, smooth), names_to = "Metric")
+
+metrics_df_long %>% ggplot(aes(x=Metric, y = value, color=Metric)) + geom_jitter() + geom_boxplot(alpha=0) + facet_wrap(~smooth) + 
+  theme_bw() + ggtitle("Summary metrics for Movelet prediction (1 session training)") + theme(plot.title = element_text(hjust = 0.5)) +
+  scale_color_d3()
+```
+
+### Metrics across sessions
+
+```{r nondomhand_per_ses,results='asis'}
+
+# Prepare table with smoothing
+table1 = metrics_df %>% filter(smooth=="Pre-Smoothing", pca == 'nondominanthand') %>% group_by(session) %>% select(Accuracy, Precision, F1.score, Sensitivity, Specificity) %>% summarize_all(mean)
+
+# Prepare table without smoothing
+table2 = metrics_df %>% filter(smooth=="Post-Smoothing", pca == 'nondominanthand') %>% group_by(session) %>% select(Accuracy, Precision, F1.score, Sensitivity, Specificity) %>% summarize_all(mean) %>% as.data.frame()
+
+# Join tables
+tables = cbind(table1, table2[, -1]) %>% round(2)
+colnames(tables)[2:11] = paste0(colnames(tables)[2:11], rep(c(".T", ".F"), each = 5))
+headers = data.frame(col_keys = colnames(tables), 
+                     from = c("Session", rep(c("Pre-Smoothing", "Post-Smoothing"), each=5)),
+                     names = c("Session", colnames(cbind(table1[-1], table2[, -1])))
+                     )
+# Print table as flextable
+tables %>% flextable::flextable() %>% 
+  set_header_df(mapping = headers, key = "col_keys") %>% 
+  merge_h(part="header") %>% 
+  merge_v(part="header") %>% 
+  theme_vanilla() %>% 
+  width(width = 27, unit = "in") %>% 
+  align(align="center", part="all") %>% 
+  vline(part="header")
+  
+```
+
+### Metrics across training modes
+
+```{r nondomhand_per_ntrain}
+metrics_df_all_n %>% 
+  filter(pca == 'nondominanthand') %>% 
+  group_by(patient, n_train, smooth) %>% 
+  select(Accuracy, Precision, F1.score, Sensitivity, Specificity) %>% 
+  summarize_all(mean) %>% 
+  pivot_longer(-c(patient, n_train, smooth),  names_to = "Metric") %>% 
+  ggplot(aes(x=n_train, y = value, color=as.factor(n_train))) + 
+  geom_jitter() + facet_grid(smooth~Metric) +  geom_boxplot(alpha=0) + 
+  theme_bw() + ggtitle("Summary metrics for Movelet prediction (n session training)") + 
+  theme(plot.title = element_text(hjust = 0.5)) + guides(color=guide_legend(title="N trained med sessions")) + xlab("Train N") +
+  scale_color_lancet() 
+  
+```
+
+
+
