@@ -1,7 +1,7 @@
 ---
 title: 'Movelet: Output for Paper'
 author: "Virgilio Gonzenbach"
-date: "10/7/2021"
+date: "`r format(Sys.time(), '%m/%d/%y')`"
 output:
   html_document: 
     df_print: paged
@@ -36,6 +36,8 @@ source("Code/summary.R")
 
 metrics_df <- read.csv('metrics_df.csv')
 metrics_df_all_n <- read.csv('metrics_df_all_n.csv')
+runtime_df <- read.csv('runtime_df.csv') %>% 
+  mutate(n_train = stringr::str_count(ses, ",") + 1, .before='ses')
 ```
 
 ## Comparisons
@@ -58,6 +60,34 @@ metrics_df %>%
   scale_color_lancet()
 #ggsave('figures/npc_boxplot.png', dpi=300)
 ```
+
+## Run Time
+
+```{r}
+runtime_df %>% 
+  filter(n_train == 1) %>% 
+  group_by(npc) %>% 
+  summarize(mean_runtime = mean(elapsed))
+```
+
+```{r}
+runtime_df %>% 
+  filter(n_train == 1) %>% 
+  mutate(npc = as.factor(npc)) %>% 
+  ggplot(aes(x=npc, y=elapsed)) + geom_boxplot() + ylab('Run time in seconds') + xlab('Number of PCs') + ggtitle('Run time per number of PCs')
+```
+
+Run times relative to 3 npc.
+
+```{r}
+# relative to 3 npc
+runtime_df %>% 
+  filter(n_train == 1) %>% 
+  group_by(npc) %>% 
+  summarize(mean_runtime = mean(elapsed)) %>% 
+  mutate(mean_runtime = mean_runtime / min(mean_runtime))
+```
+
 
 ## Dominant Hand vs NonDominant Hand vs Both Hands (w. npc=3)
 
