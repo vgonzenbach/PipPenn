@@ -5,7 +5,7 @@ for N_TRAIN in 1 2 3; do
 		# run all combinations of the sessions for N_TRAIN number of session
 	    for ses in $(python Code/combi.py $N_TRAIN); do 
 			# run both hands
-			for npc in 6 7 8 9 10; do
+			for npc in 3 4 5 6 7 8 9 10; do
 				
 				log_path=logs/bothhands/npc-${npc}_smooth-TRUE.log
 				bsub -o $log_path -e $log_path Rscript Code/train_movelet_and_predict.R --hand 'bothhands' --ses $ses --npc $npc --smooth $patient_data
